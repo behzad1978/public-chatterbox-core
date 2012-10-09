@@ -5,8 +5,6 @@
     Copyright Chatterbox Analytics Ltd 2012
     
     Requires liblinear python bindings
-    
-    TODO: Still requires django
 """
 import liblinearutil as linu
 import re
@@ -14,8 +12,6 @@ import codecs
 import os
 import unicodecsv
 import functools
-
-from django.utils.encoding import smart_unicode
 
 class memoized(object):
    """Decorator that caches a function's return value each time it is called.
@@ -49,6 +45,7 @@ def get_sparse_feature_vector(texts,features_dict,exclude):
     """
     vector = dict()
     total_toks = 0
+    print texts
     for text in texts:
         working_text = text.lower()
         working_text = re.sub(r"([^'\".,;:/?\!@#£$%^&*()_\-=+`~])(['\".,;:/?\!@#£$%^&*()_\-=+`~])", r"\1 \2",working_text)
@@ -70,7 +67,7 @@ def get_sparse_feature_vector(texts,features_dict,exclude):
                 try:
                     indx = features_dict[t]
                 except KeyError:
-                    pass
+                    print "not found", t
                 else:
                     try:
                         vector[indx] = vector[indx] + (1.0 / total_toks)
@@ -107,7 +104,7 @@ def load_features(lang=None):
         line_spl = line
         if len(line_spl) > 1:
             val = int(line_spl[1])
-            features_dict[smart_unicode(line_spl[0])] = val
+            features_dict[line_spl[0]] = val
     return features_dict
 
 @memoized
