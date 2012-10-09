@@ -93,13 +93,13 @@ def load_features(lang=None):
     """
         Loads the labels sorted in labels.txt from training.
         Returns a dictionary mapping lexical tokens to integer indices
-        
-        
+        Features are stored in the resources directory
     """
     if lang:
-        print "Loading ", lang, " labels.."
+        print "Using", lang, "labels.."
         f = unicodecsv.reader(open(os.path.join(
                         os.path.abspath(os.path.dirname(__file__)),
+                        'resources',
                         lang +"_labelsu.txt"),'rb'), encoding="utf-8", delimiter="\t")
     
     features_dict = dict()
@@ -113,17 +113,19 @@ def load_features(lang=None):
 @memoized
 def load_model(lang):
     """
-        Loads the model from file and returns it 
+        Loads the model from file and returns it.
+        Models are stored in the resources directory
     """
-    print "loading ", lang, " linear model.."
+    print "Using", lang, "linear model.."
     if lang:
         return linu.load_model(os.path.join(
                                 os.path.abspath(os.path.dirname(__file__)),
+                                'resources',
                                 lang + '_sentiment.model'))
     else:
         raise Exception
 
-def classify_text(text, lang, exclude):
+def classify_text(text, lang, exclude=[]):
     """ 
         makes the text into a feature vector, then classifies it. 
         exclude should be a list of strings to exclude from the vectors
@@ -131,14 +133,14 @@ def classify_text(text, lang, exclude):
         exclude excludes any phrase that contains or is equal to any of the
         string in the exclude list using a case insensitive comparison
         
-        TODO: What if an unsupported languge is requested?  The files won't be on disk
+        TODO: What if an unsupported language is requested?  The files won't be on disk
     """
     
     model = load_model(lang)
     features = load_features(lang)
     
     texts = [text.lower()]
-    for e in exclude:
+    for e in exclude:#this for loop is not right
         new_texts = []
         for t in texts:
             new_texts = new_texts + t.split(e)
@@ -146,4 +148,4 @@ def classify_text(text, lang, exclude):
     feature_vector = get_sparse_feature_vector(texts, features, exclude)
     p_label, p_acc, p_val = linu.predict([0], [feature_vector], model)
     p_val = p_val[0][0]/(1+abs(p_val[0][0]))
-    return (p_label, p_acc, p_val)
+    return {'label':p_label[0],'value':p_val}
