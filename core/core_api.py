@@ -1,6 +1,6 @@
-from flask import Flask, request, url_for
+from flask import Flask, request, url_for, jsonify
 
-import sentiment
+from sentiment import classify_text
 import json
 
 app = Flask(__name__)
@@ -14,7 +14,9 @@ def sentiment():
     if 'text' in request.args and 'lang' in request.args:
         text = request.args['text']
         lang = request.args['lang']
-    return json.dumps(sentiment.classify_text(text=text, lang=lang))
+        res = classify_text(text=text, lang=lang)
+        return jsonify(**res)
+    #todo: return error
 
 @app.route('/topics/ngrams')
 def ngrams():
@@ -24,4 +26,4 @@ def ngrams():
     return json.dumps(sentiment.classify_text(text=text, lang='en'))
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
