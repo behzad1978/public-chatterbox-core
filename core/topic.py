@@ -118,7 +118,7 @@ def __check_features(f_list, stopwords):
 
 def _analyse_topics(frequencies):
     """
-        Private function that requires a frequency distribution
+        Private function that requires two frequency distributions
     """
     freq = frequencies[0]
     freq_ref = frequencies[1]
@@ -158,29 +158,48 @@ def _analyse_topics(frequencies):
     very_final_toks.reverse()
     return very_final_toks
 
-def get_pos_ranked_topics(data, exclude, lang):
+def term_frequency(ngrams,lang):
+    """
+        Produces the term frequencies for each ngram
+        in a list of ngram lists
+        
+        Could we do this offline.. save cycles?
+    """
+    token_dictionary = {}
+    for ngram_list in ngrams:
+        for ng in ngram_list:
+            try:
+                token_dictionary[ng] = token_dictionary[ng] + 1
+            except KeyError:
+                token_dictionary[ng] = 1
+    return token_dictionary
+
+def get_pos_ranked_topics(pos_ngrams, neg_ngrams, exclude, lang):
     """
         Produce a ranked list of the top 30 positive phrases
         offset by the negative tokens.
         
         Return as a dictionary
+        
+        Example:
+        p = [topic.ngrams("i like cat on toast in the sunny morning".split(),'en')]
+        p1 = topic.ngrams("i like dog on toast in the sunny morning dog dog dog".split(),'en')
+        p1 = [p1] + [topic.ngrams("i like dog on toast in the sunny morning".split(),'en')]
+        topic.get_pos_ranked_topics(p1,p,[],'en')
     """
     pos_tokens = []
     neg_tokens = []
-    for k, v in data.items():
-        if abs(v['value']) > 0.2:#exclude low sentiment messages
-            final_tokens = v['ngrams']
-            if v['sent'] == -1:
-                neg_tokens = neg_tokens + [final_tokens]
+    for png in pos_ngrams:
+        pos_tokens = pos_tokens + [png]
     
-            else:
-                pos_tokens = pos_tokens + [final_tokens]
+    for nng in neg_ngrams:
+        neg_tokens = neg_tokens + [nng]
     pos = term_frequency(pos_tokens,lang)
     neg = term_frequency(neg_tokens,lang)
     final_pos = _analyse_topics([pos,neg])
     return {'pos':final_pos[:30]}
 
-def get_neg_ranked_topics(data, exclude, lang):
+def get_neg_ranked_topics(neg_ngrams, pos_ngrams, exclude, lang):
     """
         Produce a ranked list of the top 30 negative phrases
         offset by the negative tokens.
@@ -189,16 +208,10 @@ def get_neg_ranked_topics(data, exclude, lang):
     """
     pos_tokens = []
     neg_tokens = []
-    for k, v in data.items():
-        if abs(v['value']) > 0.2:#exclude low sentiment tweets
-            final_tokens = v['ngrams']
-    
-            if v['sent'] == -1:
-                neg_tokens = neg_tokens + [final_tokens]
-    
-            else:
-                pos_tokens = pos_tokens + [final_tokens]
-    
+    for png in pos_ngrams:
+        pos_tokens = pos_tokens + [png]
+    for nng in neg_ngrams:
+        neg_tokens = neg_tokens + [nng]
     pos = term_frequency(pos_tokens,lang)
     neg = term_frequency(neg_tokens,lang)
     final_neg = _analyse_topics([neg,pos])
