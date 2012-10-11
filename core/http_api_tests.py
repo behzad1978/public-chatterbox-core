@@ -1,7 +1,7 @@
 import unittest
 import http_api
 import json
-
+import topic
 # test responses
 
 bad_request_error_response = {
@@ -20,13 +20,10 @@ ngrams_ok = {
 }
 
 rank_ok = {
-  "pos": [
-    ["p", 0.3333333333333333],
-    ["l", 0.25],
-    ["e", 0.25],
-    ["s", 0.25],
-    ["a", 0.25]
-  ]
+    'pos': [
+            ('dog', 0.7142857142857143), 
+            ('i like dog on toast in the sunny morning dog dog dog', 0.3333333333333333)
+    ]
 }
 
 class HttpApiTestCase(unittest.TestCase):
@@ -77,8 +74,8 @@ class HttpApiTestCase(unittest.TestCase):
         assert json.loads(resp.data) == bad_request_error_response
 
     def test_rank(self):
-        pos = ['apples', 'I hate apples']
-        neg = ['apples', 'I hate apples']
+        pos = [topic.ngrams("i like cat on toast in the sunny morning".split(),'en')]
+        neg = [topic.ngrams("i like dog on toast in the sunny morning dog dog dog".split(),'en')] + [topic.ngrams("i like dog on toast in the sunny morning".split(),'en')]
         res = self.app.post('/topics/ranked?lang=en', data = dict(
             pos_ngrams = pos,
             neg_ngrams = neg
