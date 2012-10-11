@@ -2,7 +2,7 @@ from flask import Flask, request, url_for, jsonify
 from werkzeug.exceptions import HTTPException, default_exceptions
 
 from sentiment import classify_text
-from topic import ngrams, get_pos_ranked_topics
+from topic import ngrams, get_offset_ranked_topics
 
 # CONFIG
 
@@ -27,6 +27,7 @@ def make_json_app(import_name, **kwargs):
         return response
 
     app = Flask(import_name, **kwargs)
+    app.config.from_object(import_name)
 
     for code in default_exceptions.iterkeys():
         app.error_handler_spec[None][code] = make_json_error
@@ -36,7 +37,6 @@ def make_json_app(import_name, **kwargs):
 
 app = make_json_app(__name__)
 # from_object looks for all uppercase variables defined in this file
-app.config.from_object(__name__)
 
 @app.route('/')
 def api_root():
@@ -61,9 +61,9 @@ def api_ngrams():
 @app.route('/topics/ranked', methods=['POST'])
 def api_ranked_topics():
     lang = request.args['lang']
-    pos_ngrams = request.form['pos_ngrams']
-    neg_ngrams = request.form['neg_ngrams']
-    res = get_pos_ranked_topics(pos_ngrams, neg_ngrams, [], lang)
+    test_ngrams = request.form.getlist('test_ngrams')
+    offset_ngrams = request.form.getlist('offset_ngrams')
+    res = get_offset_ranked_topics(test_ngrams, offset_ngrams, [], lang)
     return jsonify(**res)
 
 

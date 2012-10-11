@@ -4,25 +4,29 @@ import json
 import topic
 # test responses
 
+# bad request response we're expecting
 bad_request_error_response = {
     'message': "400: Bad Request"
 }
+
+# success response we're expecting for sentiment test case
 sentiment_ok = {
-  "value": -0.6640092855131534,
-  "label": -1.0
+    "value": -0.6640092855131534,
+    "label": -1.0
 }
 
+# success response we're expecting for ngrams test case
 ngrams_ok = {
-  "ngrams": [
-    "apples",
-    "I hate apples"
-  ]
+    "ngrams": [
+        "apples",
+        "I hate apples"
+    ]
 }
 
+# success response we're expecting for rank test case
 rank_ok = {
-    'pos': [
-            ('dog', 0.7142857142857143), 
-            ('i like dog on toast in the sunny morning dog dog dog', 0.3333333333333333)
+    'ranked_testngrams': [
+        ['i like cat on toast in the sunny morning', 0.3333333333333333]
     ]
 }
 
@@ -49,7 +53,19 @@ class HttpApiTestCase(unittest.TestCase):
 
     def test_sentiment(self):
         resp = self.app.get('/sentiment?text=I%20hate%20apples&lang=en')
-        assert json.loads(resp.data) == sentiment_ok
+        response = json.loads(resp.data)
+        # assert that keys are in there
+        assert 'value' in response and 'label' in response
+        value = response['value']
+        label = response['label']
+        # assert key vals are floats
+        assert isinstance(value, float) and isinstance(label, float)
+        # assert that label is 1 or -1
+        assert abs(label) == 1
+        # assert that label and value signs are consistent with each other
+        assert (label < 0 and value < 0) or (label > 0 and value > 0)
+        # assert that value is [-1, 1]
+        assert value >= -1 and value <= 1
 
     # ngrams tests
 
@@ -74,12 +90,14 @@ class HttpApiTestCase(unittest.TestCase):
         assert json.loads(resp.data) == bad_request_error_response
 
     def test_rank(self):
-        pos = [topic.ngrams("i like cat on toast in the sunny morning".split(),'en')]
-        neg = [topic.ngrams("i like dog on toast in the sunny morning dog dog dog".split(),'en')] + [topic.ngrams("i like dog on toast in the sunny morning".split(),'en')]
-        res = self.app.post('/topics/ranked?lang=en', data = dict(
-            pos_ngrams = pos,
-            neg_ngrams = neg
-        ))
+        a = topic.ngrams("i like cat on toast in the sunny morning".split(), 'en')
+        b = topic.ngrams("i like dog on toast in the sunny morning dog dog dog".split(), 'en') + topic.ngrams(
+            "i like dog on toast in the sunny morning".split(), 'en')
+        data = dict(
+            test_ngrams=a,
+            offset_ngrams=b
+        )
+        res = self.app.post('/topics/ranked?lang=en', data=data)
         assert json.loads(res.data) == rank_ok
 
 if __name__ == '__main__':
