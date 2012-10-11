@@ -161,43 +161,36 @@ def _analyse_topics(frequencies):
 def term_frequency(ngrams,lang):
     """
         Produces the term frequencies for each ngram
-        in a list of ngram lists
+        in a list of ngrams
         
         Could we do this offline.. save cycles?
     """
     token_dictionary = {}
-    for ngram_list in ngrams:
-        for ng in ngram_list:
-            try:
-                token_dictionary[ng] = token_dictionary[ng] + 1
-            except KeyError:
-                token_dictionary[ng] = 1
+    for ng in ngrams:
+        try:
+            token_dictionary[ng] = token_dictionary[ng] + 1
+        except KeyError:
+            token_dictionary[ng] = 1
     return token_dictionary
 
-def get_pos_ranked_topics(pos_ngrams, neg_ngrams, exclude, lang):
+def get_offset_ranked_topics(test_ngrams, offset_ngrams, exclude, lang):
     """
-        Produce a ranked list of the top 30 positive phrases
-        offset by the negative tokens.
+        Produce a ranked list of the top 30 phrases from test_ngrams
+        offset by the offset_ngrams.
         
         Return as a dictionary
         
         Example:
-        p = [topic.ngrams("i like cat on toast in the sunny morning".split(),'en')]
+        p = topic.ngrams("i like cat on toast in the sunny morning".split(),'en')
         p1 = topic.ngrams("i like dog on toast in the sunny morning dog dog dog".split(),'en')
-        p1 = [p1] + [topic.ngrams("i like dog on toast in the sunny morning".split(),'en')]
-        topic.get_pos_ranked_topics(p1,p,[],'en')
+        p1 = p1 + topic.ngrams("i like dog on toast in the sunny morning".split(),'en')
+        topic.get_offset_ranked_topics(p1,p,[],'en')
     """
-    pos_tokens = []
-    neg_tokens = []
-    for png in pos_ngrams:
-        pos_tokens = pos_tokens + [png]
-    
-    for nng in neg_ngrams:
-        neg_tokens = neg_tokens + [nng]
-    pos = term_frequency(pos_tokens,lang)
-    neg = term_frequency(neg_tokens,lang)
-    final_pos = _analyse_topics([pos,neg])
-    return {'pos':final_pos[:30]}
+
+    test = term_frequency(test_ngrams,lang)
+    offset = term_frequency(offset_ngrams,lang)
+    final_test = _analyse_topics([test,offset])
+    return {'ranked_testngrams':final_test[:30]}
 
 def get_neg_ranked_topics(neg_ngrams, pos_ngrams, exclude, lang):
     """
