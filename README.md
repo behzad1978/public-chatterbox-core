@@ -26,7 +26,7 @@ POST data:
 
 ## NOTE: liblinear.so.1 needs to be compiled for the right platform! ##
 
-# sentiment.py #
+## sentiment.py ##
 	>>> import core.sentiment
 	>>> core.sentiment.classify_text(text="i hate python, it sucks",lang="en")
 	Using en linear model..
