@@ -8,7 +8,12 @@ Exposes the following API:
 Get sentiment for a piece of text  
 params:  
 `text`: the text to get the sentiment for  
-`lang`: the language of the text  
+`lang`: the language of the text
+OR
+`POST /sentiment`
+same as above but with an additional POST payload
+POST data:  
+`exclude`: list of words to exclude from sentiment classification
 
 `GET /topics/ngrams`  
 Get ngrams for a piece of text  

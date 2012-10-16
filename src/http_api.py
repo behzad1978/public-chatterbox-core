@@ -43,11 +43,14 @@ def api_root():
     return 'Welcome'
 
 
-@app.route('/sentiment')
+@app.route('/sentiment', methods=['GET','POST'])
 def api_sentiment():
     text = request.args['text']
     lang = request.args['lang']
-    res = classify_text(text=text, lang=lang)
+    exclude = []
+    if request.method == 'POST':
+        exclude = request.form['exclude']
+    res = classify_text(text=text, lang=lang, exclude=exclude)
     return jsonify(**res)
 
 

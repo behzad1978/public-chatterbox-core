@@ -51,8 +51,13 @@ class HttpApiTestCase(unittest.TestCase):
         resp = self.app.get('/sentiment?lang=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
+        resp = self.app.post('/sentiment?text=abc&lang=abc')
+        assert json.loads(resp.data) == bad_request_error_response
+
+
     def test_sentiment(self):
-        resp = self.app.get('/sentiment?text=I%20hate%20apples&lang=en')
+        exc = dict(exclude=['hate'])
+        resp = self.app.post('/sentiment?text=I%20hate%20apples&lang=en', data=exc)
         response = json.loads(resp.data)
         # assert that keys are in there
         assert 'value' in response and 'label' in response
@@ -79,6 +84,7 @@ class HttpApiTestCase(unittest.TestCase):
         resp = self.app.get('/topics/ngrams?lang=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
+
     def test_ngrams(self):
         resp = self.app.get('/topics/ngrams?text=I%20hate%20apples&lang=en')
         assert json.loads(resp.data) == ngrams_ok
@@ -88,6 +94,7 @@ class HttpApiTestCase(unittest.TestCase):
     def test_rank_bad_request(self):
         resp = self.app.post('/topics/ranked')
         assert json.loads(resp.data) == bad_request_error_response
+
 
     def test_rank(self):
         a = topic.ngrams("i like cat on toast in the sunny morning".split(), 'en')
