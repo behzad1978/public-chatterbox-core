@@ -42,7 +42,7 @@ app = make_json_app(__name__)
 def api_root():
     return 'Welcome'
 
-
+@app.route('/sentiment/', methods=['GET','POST'])
 @app.route('/sentiment', methods=['GET','POST'])
 def api_sentiment():
     text = request.args['text']
@@ -54,13 +54,14 @@ def api_sentiment():
     return jsonify(**res)
 
 
-@app.route('/topics/ngrams')
+@app.route('/topics/ngrams/')
 def api_ngrams():
     text = request.args['text']
     lang = request.args['lang']
     res = ngrams(text.split(), lang)
     return jsonify(ngrams = res)
 
+@app.route('/topics/ranked/', methods=['POST'])
 @app.route('/topics/ranked', methods=['POST'])
 def api_ranked_topics():
     lang = request.args['lang']

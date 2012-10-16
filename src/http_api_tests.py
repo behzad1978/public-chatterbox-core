@@ -42,16 +42,16 @@ class HttpApiTestCase(unittest.TestCase):
     # sentiment tests
 
     def test_sentiment_bad_request(self):
-        resp = self.app.get('/sentiment')
+        resp = self.app.get('/sentiment/')
         assert json.loads(resp.data) == bad_request_error_response
 
-        resp = self.app.get('/sentiment?text=abc')
+        resp = self.app.get('/sentiment/?text=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
-        resp = self.app.get('/sentiment?lang=abc')
+        resp = self.app.get('/sentiment/?lang=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
-        resp = self.app.post('/sentiment?text=abc&lang=abc')
+        resp = self.app.post('/sentiment/?text=abc&lang=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
 
@@ -75,24 +75,24 @@ class HttpApiTestCase(unittest.TestCase):
     # ngrams tests
 
     def test_ngrams_bad_request(self):
-        resp = self.app.get('/topics/ngrams')
+        resp = self.app.get('/topics/ngrams/')
         assert json.loads(resp.data) == bad_request_error_response
 
-        resp = self.app.get('/topics/ngrams?text=abc')
+        resp = self.app.get('/topics/ngrams/?text=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
-        resp = self.app.get('/topics/ngrams?lang=abc')
+        resp = self.app.get('/topics/ngrams/?lang=abc')
         assert json.loads(resp.data) == bad_request_error_response
 
 
     def test_ngrams(self):
-        resp = self.app.get('/topics/ngrams?text=I%20hate%20apples&lang=en')
+        resp = self.app.get('/topics/ngrams/?text=I%20hate%20apples&lang=en')
         assert json.loads(resp.data) == ngrams_ok
 
     # rank tests
 
     def test_rank_bad_request(self):
-        resp = self.app.post('/topics/ranked')
+        resp = self.app.post('/topics/ranked/')
         assert json.loads(resp.data) == bad_request_error_response
 
 
