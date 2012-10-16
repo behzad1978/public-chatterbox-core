@@ -11,8 +11,8 @@ params:
 `lang`: the language of the text
 OR
 `POST /sentiment`
-same as above but with an additional POST payload
-POST data:  
+same as above but with an additional POST payload  
+POST data:
 `exclude`: list of words to exclude from sentiment classification
 
 `GET /topics/ngrams`  
