@@ -2,7 +2,7 @@
 
 ## Chatterbox Core ##
 
-Exposes the following API:
+Exposes the following http API:
 
 `GET /sentiment`  
 Get sentiment for a piece of text  
