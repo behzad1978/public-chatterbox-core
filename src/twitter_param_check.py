@@ -2,10 +2,14 @@ import topicTest
 import operator
 import getter
 import pickle
+import csv
 
 lang ='en'
 tweets=[]
 results=[]
+
+f_w = open('results1.csv', 'w')
+tab_delimiter = False
 
 try:
     file_read = open('the_tweets_file', 'r')
@@ -18,17 +22,17 @@ except IOError:
     pickle.dump(tweets, file_write)
     file_write.close()
 
-sentiment_borders_pos = [0.7] #[i*0.1 for i in range(0,10)]
-sentiment_borders_neg = [-0.7] #[-1*i for i in sentiment_borders_pos] # -1*sentiment_border_pos
+sentiment_borders_pos = [0.75] #[i*0.1 for i in range(0,10)]
+sentiment_borders_neg = [-0.75] #[-1*i for i in sentiment_borders_pos] # -1*sentiment_border_pos
 stop_word_flags = [True, False]
-pickup_nums_1 = [int(i*len(tweets))for i in [0.75, 0.50, 0.40, 0.30, 0.20, 0.10, 0.05, 0.025]]
-pickup_nums_2 = [int(i/10) for i in pickup_nums_1 if i>10]
+pickup_nums_1 = [500] #[int(i*len(tweets))for i in [0.75, 0.50, 0.40, 0.30, 0.20, 0.10, 0.05, 0.025]]
+pickup_nums_2 = [50] #[int(i/10) for i in pickup_nums_1 if i>10]
 prob_plus_vals = [0, 0.5, 1, 1.5, 2, 2.5, 5]
 weight_similarity_vals = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7]
 quick_ratio_vals = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
-ratio_vals = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
-Levenshtein_vals = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
-stringcomp_vals = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
+ratio_vals = [0.8, 0.9]#[0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
+Levenshtein_vals = [0.3, 0.4]#, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
+stringcomp_vals = [0.3, 0.4]#, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 0.95]
 
 
 
@@ -75,52 +79,95 @@ for b_pos in sentiment_borders_pos:
 
                         for pickup_no_2 in pickup_nums_2:
 
+                            c=0
                             for quick_ratio_val in quick_ratio_vals:
+                                c+=1
+                                print 'in q-ratio loop ', c
                                 final_toks_qr_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'quick_ratio', quick_ratio_val, weight_similarity_val)
                                 final_toks_qr_pos = sorted(final_toks_qr_pos.iteritems(), key=operator.itemgetter(1))
                                 final_toks_qr_pos.reverse()
                                 #this is list of parameters and labels: ['label1', p1, 'label2', p2, 'label3', p3, 'label4']
                                 result = ['sent_border_pos', b_pos, 'sent_border_neg', b_neg, 'stp_w_flag', stop_word_flag, 'prob_plus_val', prob_plus_val,
                                           'pickup_no_1', pickup_no_1, 'weight_sim_val', weight_similarity_val,
-                                          'pickup_no_2', pickup_no_2, 'quick_ratio', quick_ratio_val, 'pos_tokens']
+                                          'pickup_no_2', pickup_no_2, 'difflib_quick_ratio', quick_ratio_val, 'pos_tokens']
                                 #another list will be added to the end: ['label1', p1, 'label2', p2, 'label3', p3, 'label4', [elements related to label4]]
                                 result.append(final_toks_qr_pos)
 
                                 final_toks_qr_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'quick_ratio', quick_ratio_val, weight_similarity_val)
                                 final_toks_qr_neg = sorted(final_toks_qr_neg.iteritems(), key=operator.itemgetter(1))
                                 final_toks_qr_neg.reverse()
-
-                                result+['neg_tokens']
+                                #another label will be added to the end: ['label1', p1, 'label2', p2, 'label3', p3, 'label4', [elements related to label4], 'label5']
+                                result = result+['neg_tokens']
+                                #another list will be added to the end: ['label1', p1, 'label2', p2, 'label3', p3, 'label4', [elements related to label4], 'label5', [elements related to label5]
                                 result.append(final_toks_qr_neg)
-
+                                if tab_delimiter:
+                                    csv.writer(f_w,'excel-tab').writerow(result)
+                                else:
+                                    csv.writer(f_w).writerow(result)
+                                #results is list of lists where each list is result.
                                 results.append(result)
 
+#                            for ratio_val in ratio_vals:
+#                                final_toks_r_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'ratio', ratio_val, weight_similarity_val)
+#                                final_toks_r_pos = sorted(final_toks_r_pos.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_r_pos.reverse()
+#                                result = ['sent_border_pos', b_pos, 'sent_border_neg', b_neg, 'stp_w_flag', stop_word_flag, 'prob_plus_val', prob_plus_val,
+#                                          'pickup_no_1', pickup_no_1, 'weight_sim_val', weight_similarity_val,
+#                                          'pickup_no_2', pickup_no_2, 'difflib_ratio', ratio_val, 'pos_tokens']
+#                                result.append(final_toks_r_pos)
+#
+#                                final_toks_r_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'ratio', ratio_val, weight_similarity_val)
+#                                final_toks_r_neg = sorted(final_toks_r_neg.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_r_neg.reverse()
+#                                result = result+['neg_tokens']
+#                                result.append(final_toks_r_neg)
+#                                if tab_delimiter:
+#                                    csv.writer(f_w,'excel-tab').writerow(result)
+#                                else:
+#                                    csv.writer(f_w).writerow(result)
+#                                #results is list of lists where each list is result.
+#                                results.append(result)
+#
+#                            for Levenshtein_val in Levenshtein_vals:
+#                                final_toks_l_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'Levenshtein', Levenshtein_val, weight_similarity_val)
+#                                final_toks_l_pos = sorted(final_toks_l_pos.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_l_pos.reverse()
+#                                result = ['sent_border_pos', b_pos, 'sent_border_neg', b_neg, 'stp_w_flag', stop_word_flag, 'prob_plus_val', prob_plus_val,
+#                                          'pickup_no_1', pickup_no_1, 'weight_sim_val', weight_similarity_val,
+#                                          'pickup_no_2', pickup_no_2, 'Levenshtein', Levenshtein_val, 'pos_tokens']
+#                                result.append(final_toks_l_pos)
+#
+#                                final_toks_l_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'Levenshtein', Levenshtein_val, weight_similarity_val)
+#                                final_toks_l_neg = sorted(final_toks_l_neg.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_l_neg.reverse()
+#                                result = result+['neg_tokens']
+#                                result.append(final_toks_l_neg)
+#                                if tab_delimiter:
+#                                    csv.writer(f_w,'excel-tab').writerow(result)
+#                                else:
+#                                    csv.writer(f_w).writerow(result)
+#                                #results is list of lists where each list is result.
+#                                results.append(result)
+#
+#                            for stringcomp_val in stringcomp_vals:
+#                                final_toks_sc_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'stringComp', stringcomp_val, weight_similarity_val)
+#                                final_toks_sc_pos = sorted(final_toks_sc_pos.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_sc_pos.reverse()
+#                                result = ['sent_border_pos', b_pos, 'sent_border_neg', b_neg, 'stp_w_flag', stop_word_flag, 'prob_plus_val', prob_plus_val,
+#                                          'pickup_no_1', pickup_no_1, 'weight_sim_val', weight_similarity_val,
+#                                          'pickup_no_2', pickup_no_2, 'stringComp', Levenshtein_val, 'pos_tokens']
+#                                result.append(final_toks_sc_pos)
+#
+#                                final_toks_sc_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'stringComp', stringcomp_val, weight_similarity_val)
+#                                final_toks_sc_neg = sorted(final_toks_sc_neg.iteritems(), key=operator.itemgetter(1))
+#                                final_toks_sc_neg.reverse()
+#                                result = result+['neg_tokens']
+#                                result.append(final_toks_sc_neg)
+#                                if tab_delimiter:
+#                                    csv.writer(f_w,'excel-tab').writerow(result)
+#                                else:
+#                                    csv.writer(f_w).writerow(result)
+#                                #results is list of lists where each list is result.
+#                                results.append(result)
 
-                            for ratio_val in ratio_vals:
-                                final_toks_r_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'ratio', ratio_val, weight_similarity_val)
-                                final_toks_r_pos = sorted(final_toks_r_pos.iteritems(), key=operator.itemgetter(1))
-                                final_toks_r_pos.reverse()
-
-                                final_toks_r_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'ratio', ratio_val, weight_similarity_val)
-                                final_toks_r_neg = sorted(final_toks_r_neg.iteritems(), key=operator.itemgetter(1))
-                                final_toks_r_neg.reverse()
-
-                            for Levenshtein_val in Levenshtein_vals:
-                                final_toks_l_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'Levenshtein', Levenshtein_val, weight_similarity_val)
-                                final_toks_l_pos = sorted(final_toks_l_pos.iteritems(), key=operator.itemgetter(1))
-                                final_toks_l_pos.reverse()
-
-                                final_toks_l_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'Levenshtein', Levenshtein_val, weight_similarity_val)
-                                final_toks_l_neg = sorted(final_toks_l_neg.iteritems(), key=operator.itemgetter(1))
-                                final_toks_l_neg.reverse()
-
-                            for stringcomp_val in stringcomp_vals:
-                                final_toks_sc_pos = topicTest.find_longest_similar_str(encompassing_toks_pos, pickup_no_2, 'stringComp', stringcomp_val, weight_similarity_val)
-                                final_toks_sc_pos = sorted(final_toks_sc_pos.iteritems(), key=operator.itemgetter(1))
-                                final_toks_sc_pos.reverse()
-
-                                final_toks_sc_neg = topicTest.find_longest_similar_str(encompassing_toks_neg, pickup_no_2, 'stringComp', stringcomp_val, weight_similarity_val)
-                                final_toks_sc_neg = sorted(final_toks_sc_neg.iteritems(), key=operator.itemgetter(1))
-                                final_toks_sc_neg.reverse()
-
-                                result = [b_pos, b_neg, stop_word_flag, prob_plus_val, pickup_no_1, weight_similarity_val, pickup_no_2, ]
+f_w.close()
