@@ -12,6 +12,7 @@ def svm_read_problem(data_file_name):
 	prob_y = []
 	prob_x = []
 	for line in open(data_file_name):
+        #Behzad: each line has a starting label of +1 or -1, indicating the classification class.
 		line = line.split(None, 1)
 		# In case an instance with all zero features
 		if len(line) == 1: line += ['']
