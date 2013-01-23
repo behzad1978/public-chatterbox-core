@@ -8,45 +8,46 @@ import re
 import random
 import liblinearutil
 
+#list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
               "twurl.nl", "Digg.com", "u.mavrev.com", "tiny.cc", "short.to", "BudURL.com", "snipr.com", "6url.com",
               "snipurl.com", "Just.as", "snurl.com", "su.pr", "kl.am", "adjix.com", "xrl.us", "notlong.com", "short.ie",
               "sn.im", "idek.net", "AltURL.com", "xr.com", "twurl.cc", "Yep.it", "RedirX.com", "to.ly", "fon.gs",
               "x.se", "twirl.at", "ru.ly"]
 
-filtered_feature_labels = set()
-features_dict = dict()#{'feature' : feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
-features_dict_reverse = dict()#{'feature_address' : feature}
+features_dict = dict()#{'feature':feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
+features_dict_reverse = dict()#{'feature_address' : feature} --> used for debugging to visualise features
 features_count_dict = dict() #{feature_address : freq_count} --> freq_count: absolute frequ of ngram occurring in token.
-max_index = 1
-train_labs = []
-results = {}
-lang = ''
-min_data = False
+max_index = 1#whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
 
-header=[]
-agreed_pairs=[]
-disagreed_pairs=[]
-conv_indx = None
-tweet_indx = None
-text_indx = None
+agreed_pairs=[]#original agreed tweets read line by line from a csv file.
+disagreed_pairs=[]#original disagreed tweets read line by line from a csv file.
+conv_id_indx = None#column no. containing conv_id which counts seed/reply pairs and is unique for both seed & reply.
+tweet_id_indx = None#column no. containing the unique tweet id.
+text_indx = None#column number where the tweet texts are.
 
+#flag --> are identical seeds-ngrams to fall in different dimensions than the replies-ngrams or the same dimensions.
+#In fact, it simply stores every seed ngram in a different location in the list than the reply ngrams.
 separate_features_for_seed_reply = True
-read_training_data_from_file = 0
+#flag --> are training data (features/ngrams) is to be created? or be read from a formerly created & saved csv file?
+read_training_data_from_file = True
 
 home_dir = os.path.expanduser('~')
 source_dir = home_dir + '/Chatterbox_UCL_Advance/Agreement_Disagreement/'
 
+#csv files containing line by line tweets in the form of seed/reply, seed/reply, ..
 agreed_file_name = 'agreed_pairs'
 disagreed_file_name = 'disagreed_pairs'
 
-training_file_name = 'labels_and_features'
-features_file_name = 'features_and_freqs'
-seed_reply_file_name = 'seed_reply_texts'
+training_file_name = 'labels_and_features'#file saving training set (labels | feature-vectors) that could be read again.
+features_file_name = 'features_and_freqs'#file saving features (ngrams) in one column and freq of occurrence in another.
+seed_reply_file_name = 'seed_reply_texts'#file saving (seed | reply) texts side by side; to be read for visualisation.
+test_result_name = 'test_result'#file saving the actual predicted labels and values on the test set.
 
 def unicode_to_float(the_list, col_nr, strt_indx):
     """
-    function changing from unicode to int to make sorting possible
+    function changing from unicode to float to make sorting possible. Since tweet_id is very long, converting to it is
+    not possible; hence, converting to float.
     """
     for r in the_list[strt_indx:]:
         val = r[col_nr]
@@ -58,8 +59,8 @@ def make_seed_reply_list(the_list):
     """
     this function creates a list like: [ [seed1, reply1], [seed2, reply2], ... ]
     """
-    #sort tweets based on conv_id to have seed_reply pairs sorted.
-    the_list = sorted(the_list[1:], key=itemgetter(conv_indx))
+    #sort tweets based on the unique conv_id to have seed_reply pairs sorted.
+    the_list = sorted(the_list[1:], key=itemgetter(conv_id_indx))
     #separate seeds from replies
     seeds = the_list[0::2]#start from index 0 and get every other line
     replies  = the_list[1::2]#start from index 1 and get every other line
@@ -142,10 +143,10 @@ def add_to_dict(features_dict, t, the_length, vector, features_count_dict):
         features_count_dict[indx] = 1
 
 def ngrams(tweet, is_seed):
+    """
+    this provides a term-frequency vector
+    """
     global max_index, features_dict, features_count_dict
-    """
-        this provides a term-frequency vector
-    """
 
     vector = dict()
     #print tweet
@@ -312,7 +313,7 @@ def extract_training_and_test_data(y, x, all_seed_reply_texts):
         length = len(y)
         for i in range(0, length):
             n = random.randint(0 ,10)
-            if n>2 :#if n>2 --> 70% data for training and 30% for validation
+            if n > 2 :#if n>2 --> 70% data for training and 30% for validation
                 y_training.append(y[i])
                 x_training.append(x[i])
                 training_texts.append(all_seed_reply_texts[i])
@@ -324,20 +325,20 @@ def extract_training_and_test_data(y, x, all_seed_reply_texts):
 
 def read_tweet_files():
     #read the csv files. The first row is the header.
-    global agreed_pairs, disagreed_pairs, header, conv_indx, tweet_indx, text_indx
+    global agreed_pairs, disagreed_pairs, conv_id_indx, tweet_id_indx, text_indx
     agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
     disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
 
     header = agreed_pairs[0]
 
-    conv_indx = header.index('conv_id')
-    tweet_indx = header.index('tweet_id')
+    conv_id_indx = header.index('conv_id')
+    tweet_id_indx = header.index('tweet_id')
     text_indx = header.index('text')
 
-    unicode_to_float(agreed_pairs, conv_indx, 1)
-    unicode_to_float(agreed_pairs, tweet_indx, 1)
-    unicode_to_float(disagreed_pairs, conv_indx, 1)
-    unicode_to_float(disagreed_pairs, tweet_indx, 1)
+    unicode_to_float(agreed_pairs, conv_id_indx, 1)
+    unicode_to_float(agreed_pairs, tweet_id_indx, 1)
+    unicode_to_float(disagreed_pairs, conv_id_indx, 1)
+    unicode_to_float(disagreed_pairs, tweet_id_indx, 1)
 
 
 def go_train():
@@ -366,33 +367,38 @@ def go_train():
         write_labels_and_features_to_csv(y, x)
         my_util.write_csv_file(source_dir+seed_reply_file_name, False, True, all_seed_reply_texts)
 
-    y_training, x_training, y_test, x_test, training_texts, test_texts = extract_training_and_test_data(y, x, all_seed_reply_texts)
+    y_training, x_training, y_test, x_test, training_texts, test_texts = \
+    extract_training_and_test_data(y, x, all_seed_reply_texts)
 
     prob = liblinearutil.problem(y_training, x_training)
     param = liblinearutil.parameter('-c 4 -B 1')
     m = liblinearutil.train(prob, param)
 
-    #p_labels --> classification labels predicted by the system.
-    #p_acc --> tuple including accuracy (for classification), MSE, and squared correlation coefficient (for regression).
-    #p_val --> classification values predicted by the system.
-    p_label, p_acc, p_val = liblinearutil.predict(y_test, x_test, m)
-
     test_result = []
-    test_result_header = ['seed', 'reply', 'original_label', 'predicted_label', 'predicted_value', 'prediction']
-    for i in range(0, len(test_texts)):
-        seed_reply_text = test_texts[i]
-        seed = seed_reply_text[0]
-        reply = seed_reply_text[1]
-        original_label=y_test[i]
-        predicted_label=p_label
-        predicted_value=p_val
-        if original_label*predicted_label>0:
-            prediction = 'correct'
-        else:
-            prediction = 'wrong'
-        test_result.append(eval[test_result_header])
 
-    print p_label, p_acc, p_val
+    if x_test <>[]:
+        #p_labels --> classification labels predicted by the system.
+        #p_acc --> tuple including accuracy (for classification), MSE, and variance (for regression).
+        #p_val --> classification values predicted by the system.
+        p_label, p_acc, p_val = liblinearutil.predict(y_test, x_test, m)
+        print '\n test set calssification accuracy:', p_acc[0]
+
+        header = ['seed', 'reply', 'original_label', 'predicted_label', 'predicted_value', 'prediction_success']
+        test_result.append(header)
+        for i in range(0, len(test_texts)):
+            seed_reply_text = test_texts[i]
+            seed = seed_reply_text[0]
+            reply = seed_reply_text[1]
+            original_label=y_test[i]
+            predicted_label=int(p_label[i])
+            predicted_value=p_val[i]
+            if original_label*predicted_label>0:
+                prediction = 'correct'
+            else:
+                prediction = 'wrong'
+            test_result.append([seed, reply, original_label, predicted_label, predicted_value, prediction])
+    my_util.write_csv_file(source_dir+test_result_name, False, True, test_result)
+
 
     #-v n --> n-fold cross validation
 #    param_cv = liblinearutil.parameter('-c 1 -B 0 -v 2')
