@@ -19,6 +19,7 @@ features_dict = dict()#{'feature':feature_address} --> feature is an ngrmam, add
 features_dict_reverse = dict()#{'feature_address' : feature} --> used for debugging to visualise features
 features_count_dict = dict() #{feature_address : freq_count} --> freq_count: absolute frequ of ngram occurring in token.
 max_index = 1#whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
+train_labs=[]
 
 agreed_pairs=[]#original agreed tweets read line by line from a csv file.
 disagreed_pairs=[]#original disagreed tweets read line by line from a csv file.
@@ -30,14 +31,14 @@ text_indx = None#column number where the tweet texts are.
 #In fact, it simply stores every seed ngram in a different location in the list than the reply ngrams.
 separate_features_for_seed_reply = True
 #flag --> are training data (features/ngrams) is to be created? or be read from a formerly created & saved csv file?
-read_training_data_from_file = True
+read_training_data_from_file = False
 
 home_dir = os.path.expanduser('~')
 source_dir = home_dir + '/Chatterbox_UCL_Advance/Agreement_Disagreement/'
 
 #csv files containing line by line tweets in the form of seed/reply, seed/reply, ..
-agreed_file_name = 'agreed_pairs'
-disagreed_file_name = 'disagreed_pairs'
+agreed_file_name = 'agreed_pairs_12'
+disagreed_file_name = 'disagreed_pairs_12'
 
 training_file_name = 'labels_and_features'#file saving training set (labels | feature-vectors) that could be read again.
 features_file_name = 'features_and_freqs'#file saving features (ngrams) in one column and freq of occurrence in another.
