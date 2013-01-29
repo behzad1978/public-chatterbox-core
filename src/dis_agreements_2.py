@@ -7,6 +7,7 @@ from operator import itemgetter
 import re
 import random
 import liblinearutil
+import math_extra
 
 #list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
@@ -159,7 +160,6 @@ def ngrams(tweet, is_seed):
     """
     global max_index, features_dict, features_count_dict
 
-    is_the_first_tok=True
     vector = dict()
     #print tweet
     split_tweet_text = tweet.lower().split()
@@ -190,12 +190,14 @@ def ngrams(tweet, is_seed):
 
     tokens = tweet_text.split()
 
-    max = 3
+    max = 4
 
     #i --> the length of the token
     #j --> starting index of the token
     if len(tokens)>0:#sometimes happens that tokens is empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
+        very_last_tok=''
         for i in range(1, max):
+            is_the_first_tok = True#adding the very first ngram to dict
             for j in xrange(0, len(tokens) - (i - 1)):
                 if check_features(tokens[j:j + i]):
 
@@ -210,12 +212,13 @@ def ngrams(tweet, is_seed):
 
                     #these extra lines create extra tokens for the beginning and end of tweets.
                     if is_the_first_tok:#beginning of tweet -- note that j is not necessarily 0 as at j==0 the check_feature can turn out to be False!
-                        t = 'beg ' + t
-                        add_to_dict(features_dict, t, len(tokens), vector, features_count_dict)
-                    is_the_first_tok = False
-            if check_features(tokens[j:j + i]):
-                t = 'end ' + t
-                add_to_dict(features_dict, t, len(tokens), vector, features_count_dict)
+                        very_first_tok = 'beg ' + t
+                        add_to_dict(features_dict, very_first_tok, len(tokens), vector, features_count_dict)
+                        is_the_first_tok = False
+                    #every time check_features is correct the vary_last_tok gets updated, but will be added to the dict only when the j loop is over!
+                    #this is because when j is in its final iteration, the check_features can be False and we can miss adding the very final tok!
+                    very_last_tok = 'end ' + t
+            add_to_dict(features_dict, very_last_tok, len(tokens), vector, features_count_dict)
 
     return vector
 
@@ -362,6 +365,12 @@ def create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_rep
 
     pos_feature_vectors, pos_seed_reply_texts = get_sparse_feature_vector(seed_reply_agreed,    text_indx)
     neg_feature_vectors, neg_seed_reply_texts = get_sparse_feature_vector(seed_reply_disagreed, text_indx)
+
+#this bit intends to double the value of negative features instead of duplicating tweets.
+#    for v in neg_feature_vectors:
+#        for key in v:
+#            v[key] *=2
+
     other_feature_vectors, other_seed_reply_texts = get_sparse_feature_vector(seed_reply_others, text_indx)
 
     write_features_and_freqs_to_csv()
@@ -375,12 +384,28 @@ def create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_rep
     y = y + [0] * len(other_feature_vectors)
 
     x = pos_feature_vectors + neg_feature_vectors + other_feature_vectors
-    all_seed_reply_texts = pos_seed_reply_texts + neg_seed_reply_texts + seed_reply_others
+    all_seed_reply_texts = pos_seed_reply_texts + neg_seed_reply_texts + other_seed_reply_texts
 
     write_labels_and_features_to_csv(y, x)
     my_util.write_csv_file(source_dir + seed_reply_file_name, False, True, all_seed_reply_texts)
 
     return x, y, all_seed_reply_texts
+
+def calc_stats_of_training_classification(y, x, m):
+
+    p_label, p_acc, p_val = liblinearutil.predict(y, x, m)
+    pos=[]
+    neg=[]
+    for i in range(0, len(y)):
+        if y[i]==1:
+            pos = pos+p_val[i]
+        else:
+            neg = neg+p_val[i]
+
+    mean_pos, std_pos = math_extra.calc_mean_stdev(pos)
+    mean_neg, std_neg = math_extra.calc_mean_stdev(neg)
+
+    return mean_pos, std_pos, mean_neg, std_neg
 
 
 def go_train(x, y, all_seed_reply_texts):
@@ -389,8 +414,10 @@ def go_train(x, y, all_seed_reply_texts):
                                                             extract_training_and_test_data(y, x, all_seed_reply_texts)
 
     prob = liblinearutil.problem(y_training, x_training)
-    param = liblinearutil.parameter('-c 4 -B 1')
+    param = liblinearutil.parameter('-c 1 -B 1')
     m = liblinearutil.train(prob, param)
+
+    mean_pos, std_pos, mean_neg, std_neg = calc_stats_of_training_classification(y_training, x_training, m)
 
     test_result = []
 
@@ -400,10 +427,9 @@ def go_train(x, y, all_seed_reply_texts):
         #p_val --> classification values predicted by the system.
         p_label, p_acc, p_val = liblinearutil.predict(y_test, x_test, m)
 
-        print '\nTest set calssification accuracy:', p_acc[0]
-
         header = ['seed', 'reply', 'original_label', 'predicted_label', 'predicted_value', 'prediction_success']
         test_result.append(header)
+        nr_of_correct_classifications=0
         for i in range(0, len(test_texts)):
             seed_reply_text = test_texts[i]
             seed = seed_reply_text[0]
@@ -413,17 +439,28 @@ def go_train(x, y, all_seed_reply_texts):
             predicted_value=p_val[i]
             #if original_label*predicted_label>0:
             prediction = 'wrong'
+            threshold_pos = mean_pos - 2.5 * std_pos
+            threshold_neg = mean_neg + 1.5 * std_neg
             if original_label==1:
-                if predicted_value[0] > 0.5:
+                if predicted_value[0] > threshold_pos:#0.5:
                     prediction = 'correct'
+                    nr_of_correct_classifications +=1
             elif original_label==-1:
-                if predicted_value[0] < -0.5:
+                if predicted_value[0] < threshold_neg:#-0.5:
                     prediction = 'correct'
+                    nr_of_correct_classifications +=1
             elif original_label==0:
-                if (predicted_value[0] > -0.5) and (predicted_value[0] < 0.5):
+                if (predicted_value[0] > threshold_neg) and (predicted_value[0] < threshold_pos):
                     prediction = 'correct'
+                    nr_of_correct_classifications +=1
             test_result.append([seed, reply, original_label, predicted_label, predicted_value, prediction])
+
+        classification_accuracy = float(nr_of_correct_classifications) / len(test_texts)
+        print '\nTest set calssification accuracy:', classification_accuracy
+
     my_util.write_csv_file(source_dir+test_result_name, False, True, test_result)
+
+    return classification_accuracy
 
 
     #-v n --> n-fold cross validation
@@ -464,7 +501,17 @@ if read_training_data_from_file:
 else:
     x, y, all_seed_reply_texts = create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_reply_other_pairs, text_indx)
 
-go_train(x, y, all_seed_reply_texts)
+c_a = []
+for i in range(0, 50):
+    classification_accuracy = go_train(x, y, all_seed_reply_texts)
+    c_a.append(classification_accuracy)
+
+c_a = sorted(c_a)
+mean, stdev = math_extra.calc_mean_stdev(c_a)
+print 'max:', c_a[len(c_a)-1]
+print 'min:', c_a[0]
+print 'mean:', mean
+print 'stdev:', stdev
 
 
 ########################################################################################################################
