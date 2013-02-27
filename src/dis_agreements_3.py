@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 __author__ = 'behzadbehzadan'
 
+"""
+In this version agreed pairs are trained versus both of the disagreed pairs and followups. So agreed pairs fall in
+class A whereas disagreed pairs and other pairs fall class B.
+"""
+
 import my_util
 import os
 from operator import itemgetter
@@ -30,10 +35,9 @@ train_labs=[]
 separate_features_for_seed_reply = True
 #flag --> is training data (features/ngrams) to be created? or read from a formerly created & saved csv file?
 read_training_data_from_file = False
-equalise_pos_neg_sets = True
+equalise_pos_neg_sets = False
 strip_singles_flag = False
-train_with_liblinear = True
-train_with_svm = False
+classifier_labels = [+1, -1, +1]#[+1, -1, -1]#[agreed, disagreed, others]
 
 home_dir = os.path.expanduser('~')
 source_dir = home_dir + '/Chatterbox_UCL_Advance/Agreement_Disagreement/convs_123/'
@@ -50,8 +54,8 @@ followups_file_name = 'followups'
 training_file_name = 'labels_and_features'#file saving training set (labels | feature-vectors) that could be read again.
 features_file_name = 'features_and_freqs'#file saving features (ngrams) in one column and freq of occurrence in another.
 seed_reply_file_name = 'seed_reply_texts'#file saving (seed | reply) texts side by side; to be read for visualisation.
-test_result_name = 'test/test_set'#Results2(svm)/test_set'#file saving the actual predicted labels and values on the test set.
-tabel_result_name = 'test/tabel'
+test_result_name = 'Results3/test_set'#file saving the actual predicted labels and values on the test set.
+tabel_result_name = 'Results3/tabel'
 
 def unicode_to_float(the_list, col_nr, strt_indx):
     """
@@ -82,7 +86,7 @@ def make_seed_reply_list(the_list, conv_id_indx, s_r_indx):
     this function creates a list like: [ [seed1, reply1], [seed2, reply2], ... ]
     """
     #sort tweets based on the unique conv_id, then by S/R key to have seed_reply pairs sorted. An extra step for better
-    #assurance in spite of the fact that the csv file may be in the correct order and may not require sorting.
+    #assurance in spite of the fact that the csv file may be in the correct order and does not require sorting.
     the_list = sorted(the_list[1:], key=itemgetter(conv_id_indx, s_r_indx))
     #separate seeds from replies
     seeds = the_list[0::2]#start from index 0 and get every other line
@@ -167,6 +171,7 @@ def ngrams(tweet, is_seed):
     """
     this provides a term-frequency vector
     """
+
     vector = dict()
     #print tweet
     split_tweet_text = tweet.lower().split()
@@ -306,7 +311,6 @@ def write_features_and_freqs_to_csv():
             pass
     my_util.write_csv_file(source_dir+features_file_name, False, True, feature_freq_list)
 
-
 def write_labels_and_features_to_csv(labels, features):
     """
     this function creates a tab deliminator csv file of the labels and features in the form of:
@@ -325,34 +329,25 @@ def write_labels_and_features_to_csv(labels, features):
             final_list.append(the_list)
     my_util.write_csv_file(source_dir+training_file_name, True, True, final_list)
 
-
-def extract_training_and_test_data(y, x, all_seed_reply_texts):
+def randomly_extract_training_and_test_data(y, x, all_seed_reply_texts):
     y_training=[]
     x_training=[]
     y_test=[]
     x_test=[]
-    y_other=[]
-    x_other=[]
     training_texts=[]
     test_texts=[]
-    other_texts=[]
     if len(y)==len(x):
         length = len(y)
         for i in range(0, length):
             n = random.randint(1, 10)
-            if train_with_liblinear and y[i] == 0:
-                y_other.append(y[i])
-                x_other.append(x[i])
-                other_texts.append(all_seed_reply_texts[i])
+            if n > 3 :#if n>3 --> 70% data for training and 30% for validation
+                y_training.append(y[i])
+                x_training.append(x[i])
+                training_texts.append(all_seed_reply_texts[i])
             else:
-                if n > 3 :#if n>3 --> 70% data for training and 30% for validation
-                    y_training.append(y[i])
-                    x_training.append(x[i])
-                    training_texts.append(all_seed_reply_texts[i])
-                else:
-                    y_test.append(y[i])
-                    x_test.append(x[i])
-                    test_texts.append(all_seed_reply_texts[i])
+                y_test.append(y[i])
+                x_test.append(x[i])
+                test_texts.append(all_seed_reply_texts[i])
 
     if equalise_pos_neg_sets:
         #duplicating pos/neg feature vectors may cause duplicate elements in the test set; remove!
@@ -376,62 +371,90 @@ def extract_training_and_test_data(y, x, all_seed_reply_texts):
                 y_test.pop(indx)
                 test_texts.pop(indx)
 
-    if train_with_liblinear:
-        #We add 50% of other tweets that are neither agreed nor disagreed to the test set.
-        if len(y_test)==len(x_test):
-            length=len(y_test)/2
-            if len(y_other)==len(x_other):
-                length_other = len(y_other)
-                for i in range(0, length):
-                    n = random.randint(0, length_other-1)
-                    y_test.append(y_other[n])
-                    x_test.append(x_other[n])
-                    test_texts.append(other_texts[n])
-
-
     return y_training, x_training, y_test, x_test, training_texts, test_texts
 
 
 def create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx):
     global features_count_dict
 
-    pos_feature_vectors, pos_seed_reply_texts = get_sparse_feature_vector(seed_reply_agreed,    text_indx)
-    neg_feature_vectors, neg_seed_reply_texts = get_sparse_feature_vector(seed_reply_disagreed, text_indx)
-    other_feature_vectors, other_seed_reply_texts =get_sparse_feature_vector(seed_reply_others, text_indx)
+    agreed_feature_vectors,    agreed_seed_reply_texts    = get_sparse_feature_vector(seed_reply_agreed,    text_indx)
+    disagreed_feature_vectors, disagreed_seed_reply_texts = get_sparse_feature_vector(seed_reply_disagreed, text_indx)
+    other_feature_vectors,     other_seed_reply_texts     = get_sparse_feature_vector(seed_reply_others, text_indx)
 
+    #since we want to classify positive tweets from negative and other tweets, 50% of the training set must contain
+    #positive tweets and 50% contain negative and other tweets (25% negative and 25% other tweets).
     if equalise_pos_neg_sets:
-        size_diff = len(pos_feature_vectors) - len(neg_feature_vectors)
+        size_diff = len(agreed_feature_vectors) - len(disagreed_feature_vectors)
         if size_diff > 0:
-            length = len(neg_feature_vectors)
+            length = len(disagreed_feature_vectors)
             for i in xrange(0, size_diff):
                 r = random.randint(0, length - 1)
-                duplicated_vect = neg_feature_vectors[r]
-                neg_feature_vectors.append(duplicated_vect)
-                neg_seed_reply_texts.append(neg_seed_reply_texts[r])
+                duplicated_vect = disagreed_feature_vectors[r]
+                disagreed_feature_vectors.append(duplicated_vect)
+                disagreed_seed_reply_texts.append(disagreed_seed_reply_texts[r])
+                #update the feature_count_dict for duplicated tokens
+                for indx in duplicated_vect.keys():
+                    features_count_dict[indx] += 1
         elif size_diff < 0:
-            length = len(pos_feature_vectors)
+            length = len(agreed_feature_vectors)
             for i in xrange(0, size_diff):
                 r = random.randint(0, length - 1)
-                duplicated_vect = pos_feature_vectors[r]
-                pos_feature_vectors.append(duplicated_vect)
-                pos_seed_reply_texts.append(pos_seed_reply_texts[r])
-        #update the feature_count_dict for duplicated tokens
-        for indx in duplicated_vect.keys():
-            features_count_dict[indx] += 1
-
-    if strip_singles_flag:
-        pos_feature_vectors = strip_singles(pos_feature_vectors)
-        neg_feature_vectors = strip_singles(neg_feature_vectors)
-        other_feature_vectors=strip_singles(other_feature_vectors)
+                duplicated_vect = agreed_feature_vectors[r]
+                agreed_feature_vectors.append(duplicated_vect)
+                agreed_seed_reply_texts.append(agreed_seed_reply_texts[r])
+                #update the feature_count_dict for duplicated tokens
+                for indx in duplicated_vect.keys():
+                    features_count_dict[indx] += 1
 
     write_features_and_freqs_to_csv()
 
-    y = [1] * len(pos_feature_vectors)
-    y = y + [-1] * len(neg_feature_vectors)
-    y = y + [0] * len(other_feature_vectors)
+    if strip_singles_flag:
+        agreed_feature_vectors = strip_singles(agreed_feature_vectors)
+        disagreed_feature_vectors = strip_singles(disagreed_feature_vectors)
+        other_feature_vectors=strip_singles(other_feature_vectors)
 
-    x = pos_feature_vectors + neg_feature_vectors + other_feature_vectors
-    all_seed_reply_texts = pos_seed_reply_texts + neg_seed_reply_texts + other_seed_reply_texts
+
+    l1 = classifier_labels[0]
+    l2 = classifier_labels[1]
+    l3 = classifier_labels[2]
+
+
+    if (l1==+1 and l2==l3==-1):# or (l1==-1 and l2==l3==+1):
+
+        if equalise_pos_neg_sets:
+            disagreed_class_size = other_class_size = len(agreed_feature_vectors)/2
+            sampled = random.sample(zip(disagreed_feature_vectors, disagreed_seed_reply_texts), disagreed_class_size)
+            disagreed_feature_vectors = list((zip(*sampled))[0])
+            disagreed_seed_reply_texts= list((zip(*sampled))[1])
+        else:
+            #keep negative set as it is, and sample the rest from other pairs
+            other_class_size = len(agreed_feature_vectors) - len(disagreed_feature_vectors)
+
+        sampled = random.sample(zip(other_feature_vectors, other_seed_reply_texts), other_class_size)
+        other_feature_vectors = list((zip(*sampled))[0])
+        other_seed_reply_texts = list((zip(*sampled))[1])
+
+    elif (l2==-1 and l1==l3==+1):# or (l2==+1 and l1==l2==-1):
+
+        agreed_class_size = other_class_size = len(disagreed_feature_vectors)/2
+        sampled = random.sample(zip(agreed_feature_vectors, agreed_seed_reply_texts), agreed_class_size)
+        agreed_feature_vectors = list((zip(*sampled))[0])
+        agreed_seed_reply_texts= list((zip(*sampled))[1])
+
+        sampled = random.sample(zip(other_feature_vectors, other_seed_reply_texts), other_class_size)
+        other_feature_vectors = list((zip(*sampled))[0])
+        other_seed_reply_texts = list((zip(*sampled))[1])
+
+    else:
+        raise Exception('classifier label list is wrong!')
+
+
+    y = [l1] * len(agreed_feature_vectors)
+    y = y + [l2] * len(disagreed_feature_vectors)
+    y = y + [l3] * len(other_feature_vectors)
+
+    x = agreed_feature_vectors + disagreed_feature_vectors + other_feature_vectors
+    all_seed_reply_texts = agreed_seed_reply_texts + disagreed_seed_reply_texts + other_seed_reply_texts
 
     write_labels_and_features_to_csv(y, x)
     my_util.write_csv_file(source_dir + seed_reply_file_name, False, True, all_seed_reply_texts)
@@ -458,158 +481,139 @@ def calc_stats_of_training_classification(y, x, m):
 def go_train(x, y, all_seed_reply_texts, trial_nr):
 
     y_training, x_training, y_test, x_test, training_texts, test_texts = \
-                                                            extract_training_and_test_data(y, x, all_seed_reply_texts)
+                                                            randomly_extract_training_and_test_data(y, x, all_seed_reply_texts)
 
-    if train_with_liblinear:
-        prob = liblinearutil.problem(y_training, x_training)
-        param = liblinearutil.parameter('-c 1 -B 1')
-        m = liblinearutil.train(prob, param)
-        #p_labels --> classification labels predicted by the system.
-        #p_acc --> tuple including accuracy (for classification), MSE, and variance (for regression).
-        #p_val --> classification values predicted by the system.
-        p_label, p_acc, p_val = liblinearutil.predict(y_test, x_test, m)
-    elif train_with_svm:
-        svm_params = '-s 0 -t 0 -c 1 -w1 1 -w-1 2.5 -w0 1 -b 1'#-s 0 --> multi-class classification, -t 0 --> linear kernel
-        prob = svmutil.svm_problem(y_training, x_training)
-        param = svmutil.svm_parameter(svm_params)
-        m = svmutil.svm_train(prob, param)
-        p_label, p_acc, p_val = svmutil.svm_predict(y_test, x_test, m)
+    prob = liblinearutil.problem(y_training, x_training)
+    param = liblinearutil.parameter('-s 1 -c 1 -B 1')
+    m = liblinearutil.train(prob, param)
 
-    if train_with_liblinear:
-        mean_pos, std_pos, mean_neg, std_neg = calc_stats_of_training_classification(y_training, x_training, m)
+    mean_pos, std_pos, mean_neg, std_neg = calc_stats_of_training_classification(y_training, x_training, m)
 
     test_result = []
 
     if x_test <>[]:
+        #p_labels --> classification labels predicted by the system.
+        #p_acc --> tuple including accuracy (for classification), MSE, and variance (for regression).
+        #p_val --> classification values predicted by the system.
+        p_label, p_acc, p_val = liblinearutil.predict(y_test, x_test, m)
 
         header = ['seed', 'reply', 'original_label', 'predicted_label', 'predicted_value', 'prediction_success']
         test_result.append(header)
-        true_pos = true_neg = true_zero = 0
-        false_pos = false_neg = false_zero = 0
-        predicted_value=0
+        nCorrect_classifications=0
+        nCorrect_classification_pos=0
+        nCorrect_classification_neg=0
+        nIncorrec_classification_pos=0
+        nIncorrec_classification_neg=0
         for i in range(0, len(test_texts)):
             seed_reply_text = test_texts[i]
             seed = seed_reply_text[0]
             reply= seed_reply_text[1]
             original_label=y_test[i]
             predicted_label=int(p_label[i])
-            if train_with_liblinear:
-                predicted_value=p_val[i]
-                threshold_pos = +0.19 #mean_pos - 2 * std_pos
-                threshold_neg = -0.19 #mean_neg + 2 * std_neg
-                if predicted_value[0] > threshold_pos:
-                    predicted_label = +1
-                elif predicted_value[0] < threshold_neg:
-                    predicted_label = -1
-                else:
-                    predicted_label = 0
+            predicted_value=p_val[i]
             #if original_label*predicted_label>0:
             prediction = 'wrong'
-
-            if original_label == +1:
-                if  predicted_label == +1:
+            threshold_pos = 0 #mean_pos - 2 * std_pos
+            threshold_neg = 0 #mean_neg + 2 * std_neg
+            if original_label==1:
+                if predicted_value[0] > threshold_pos:
                     prediction = 'correct'
-                    true_pos += 1
-                elif predicted_label == -1:
-                    false_neg +=1
-                elif predicted_label == 0:
-                    false_zero +=1
-            elif original_label == -1:
-                if predicted_label == -1:
+                    nCorrect_classification_pos +=1
+                    nCorrect_classifications +=1
+                else:
+                    nIncorrec_classification_pos +=1
+            elif original_label==-1:
+                if predicted_value[0] < threshold_neg:
                     prediction = 'correct'
-                    true_neg +=1
-                elif predicted_label == +1:
-                    false_pos +=1
-                elif predicted_label == 0:
-                    false_zero +=1
-            elif original_label == 0:
-                if predicted_label == 0:
-                    prediction = 'correct'
-                    true_zero +=1
-                elif predicted_label == +1:
-                    false_pos +=1
-                elif predicted_label == -1:
-                    false_neg +=1
+                    nCorrect_classification_neg +=1
+                    nCorrect_classifications +=1
+                else:
+                    nIncorrec_classification_neg +=1
             test_result.append([seed, reply, original_label, predicted_label, predicted_value, prediction])
         #print 'threshold_pos', threshold_pos, "threshold_neg:", threshold_neg
 
-        classification_accuracy = round(float(true_pos + true_neg + true_zero) / len(test_texts), 2)
-        precision_pos = round(float(true_pos) / (true_pos + false_pos), 2)
-        if true_neg == 0:
-            precision_neg=0
-        else:
-            precision_neg = round(float(true_neg) / (true_neg + false_neg), 2)
-        precision_zero = round(float(true_zero) / (true_zero + false_zero), 2)
-        recall_pos = round(float(true_pos) / (true_pos + false_neg + false_zero), 2)
-        recall_neg = round(float(true_neg) / (true_neg + false_pos + false_zero), 2)
-        recall_zero = round(float(true_zero) / (true_zero + false_pos + false_neg), 2)
+        classification_accuracy = round(float(nCorrect_classifications) / len(test_texts), 2)
+        precision_pos = round(float(nCorrect_classification_pos) / (nCorrect_classification_pos+nIncorrec_classification_neg), 2)
+        precision_neg = round(float(nCorrect_classification_neg) / (nCorrect_classification_neg+nIncorrec_classification_pos), 2)
+        recall_pos = round(float(nCorrect_classification_pos) / (nCorrect_classification_pos+nIncorrec_classification_pos), 2)
+        recall_neg = round(float(nCorrect_classification_neg) / (nCorrect_classification_neg+nIncorrec_classification_neg), 2)
+
+        if nCorrect_classifications <> (nCorrect_classification_pos+nCorrect_classification_neg):
+            print "nr of total correct classification is not equal to the number of +1 and -1 classification!!!!!"
+
         print 'trial no:', trial_nr, '\nTest set calssification accuracy:', classification_accuracy
 
     my_util.write_csv_file(source_dir+test_result_name+str(trial_nr)+'_'+str(classification_accuracy)+'%', False, True, test_result)
 
-    return classification_accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero
+    return classification_accuracy, precision_pos, precision_neg, recall_pos, recall_neg
 
 
     #-v n --> n-fold cross validation
 #    param_cv = liblinearutil.parameter('-c 1 -B 0 -v 2')
 #    m_cv = liblinearutil.train(prob, param_cv)
 
-def read_files():
-    #original agreed tweets read line by line from a csv file. The first row is the header.
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
-    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
-    #original disagreed tweets read line by line from a csv file. The first row is the header.
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
-    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
-    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
-    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
 
-    header = agreed_pairs[0]
-    conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
-    tweet_id_indx = header.index('tweet_id')#tweet_id is a unique no. associated to each single tweet.
-    s_r_indx = header.index('S/R')#S/R stickers implying whether the tweet is seed or reply.
-    text_indx = header.index('text')#the tweet texts.
+#original agreed tweets read line by line from a csv file. The first row is the header.
+agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
+positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
+supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
+#original disagreed tweets read line by line from a csv file. The first row is the header.
+disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
+negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
+offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
+other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
 
-    ##############################################################################################################
-    ##############################################################################################################
-    agreed_pairs = agreed_pairs + positive_answers_pairs[1:] + supportive_pairs[1:]
-    disagreed_pairs = disagreed_pairs + negative_answers_pairs[1:] + offensive_pairs[1:]
-    ##############################################################################################################
-    ##############################################################################################################
+header = agreed_pairs[0]
+conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
+tweet_id_indx = header.index('tweet_id')#tweet_id is a unique no. associated to each single tweet.
+s_r_indx = header.index('S/R')#S/R stickers implying whether the tweet is seed or reply.
+text_indx = header.index('text')#the tweet texts.
 
-    agreed_pairs    = unicode_to_float(agreed_pairs,    conv_id_indx,  1)
-    agreed_pairs    = unicode_to_float(agreed_pairs,    tweet_id_indx, 1)
-    disagreed_pairs = unicode_to_float(disagreed_pairs, conv_id_indx,  1)
-    disagreed_pairs = unicode_to_float(disagreed_pairs, tweet_id_indx, 1)
-    other_pairs     = unicode_to_float(other_pairs,      conv_id_indx, 1)
-    other_pairs     = unicode_to_float(other_pairs,     tweet_id_indx, 1)
+##############################################################################################################
+##############################################################################################################
+agreed_pairs    = agreed_pairs    + positive_answers_pairs[1:] + supportive_pairs[1:]
+disagreed_pairs = disagreed_pairs + negative_answers_pairs[1:] + offensive_pairs[1:]
+##############################################################################################################
+##############################################################################################################
 
-    agreed_pairs    = code_0_1_for_seed_reply(agreed_pairs,    s_r_indx, 1)
-    disagreed_pairs = code_0_1_for_seed_reply(disagreed_pairs, s_r_indx, 1)
-    other_pairs     = code_0_1_for_seed_reply(other_pairs,     s_r_indx, 1)
+agreed_pairs    = unicode_to_float(agreed_pairs,    conv_id_indx,  1)
+agreed_pairs    = unicode_to_float(agreed_pairs,    tweet_id_indx, 1)
+disagreed_pairs = unicode_to_float(disagreed_pairs, conv_id_indx,  1)
+disagreed_pairs = unicode_to_float(disagreed_pairs, tweet_id_indx, 1)
+other_pairs     = unicode_to_float(other_pairs,      conv_id_indx, 1)
+other_pairs     = unicode_to_float(other_pairs,     tweet_id_indx, 1)
 
-    seed_reply_agreed    = make_seed_reply_list(agreed_pairs,    conv_id_indx, s_r_indx)
-    seed_reply_disagreed = make_seed_reply_list(disagreed_pairs, conv_id_indx, s_r_indx)
-    seed_reply_others = make_seed_reply_list(other_pairs,     conv_id_indx, s_r_indx)
+agreed_pairs    = code_0_1_for_seed_reply(agreed_pairs,    s_r_indx, 1)
+disagreed_pairs = code_0_1_for_seed_reply(disagreed_pairs, s_r_indx, 1)
+other_pairs     = code_0_1_for_seed_reply(other_pairs,     s_r_indx, 1)
 
-    return seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx
-
+seed_reply_agreed    = make_seed_reply_list(agreed_pairs,    conv_id_indx, s_r_indx)
+seed_reply_disagreed = make_seed_reply_list(disagreed_pairs, conv_id_indx, s_r_indx)
+seed_reply_other_pairs=make_seed_reply_list(other_pairs,     conv_id_indx, s_r_indx)
 
 if read_training_data_from_file:
     y, x = liblinearutil.svm_read_problem(source_dir + training_file_name + '.csv')
     all_seed_reply_texts = my_util.read_csv_file(source_dir + seed_reply_file_name, True)
 else:
-    seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx = read_files()
-    x, y, all_seed_reply_texts = create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx)
-    #x, y, all_seed_reply_texts = create_labels_and_features(sub_seed_reply_agreed, seed_reply_disagreed, seed_reply_other_pairs, text_indx)
+    x, y, all_seed_reply_texts = create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_reply_other_pairs, text_indx)
+
+########################################################################################################################
+########################################################################################################################
+print "--------------------------------------------------------------------------------------------------------------\n"
+print "\ncross validation in progress..."
+prob_CV = liblinearutil.problem(y, x)
+param = liblinearutil.parameter('-c 1 -B 1 -v 10')
+m = liblinearutil.train(prob_CV, param)
+print "\ncross validation finished."
+print "--------------------------------------------------------------------------------------------------------------\n"
+########################################################################################################################
+########################################################################################################################
 
 results = []
-header = ['iteration', 'accuracy', 'precision_pos', 'precision_neg', 'precision_zero', 'recall_pos', 'recall_neg', 'recall_zero']
+header = ['iteration', 'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg']
 for i in range(0, 20):
-    classification_accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                                                                            go_train(x, y, all_seed_reply_texts, i+1)
-    result = [i+1, classification_accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero]
+    classification_accuracy, precision_pos, precision_neg, recall_pos, recall_neg = go_train(x, y, all_seed_reply_texts, i+1)
+    result = [i+1, classification_accuracy, precision_pos, precision_neg, recall_pos, recall_neg]
     results.append(result)
 
 results = sorted(results, key=itemgetter(1))
@@ -617,22 +621,20 @@ results.reverse()
 mean_ac, stdev_ac = math_extra.calc_mean_stdev([row[1] for row in results])
 mean_pp, stdev_pp = math_extra.calc_mean_stdev([row[2] for row in results])
 mean_pn, stdev_pn = math_extra.calc_mean_stdev([row[3] for row in results])
-mean_pz, stdev_pz = math_extra.calc_mean_stdev([row[4] for row in results])
-mean_rp, stdev_rp = math_extra.calc_mean_stdev([row[5] for row in results])
-mean_rn, stdev_rn = math_extra.calc_mean_stdev([row[6] for row in results])
-mean_rz, stdev_rz = math_extra.calc_mean_stdev([row[7] for row in results])
+mean_rp, stdev_rp = math_extra.calc_mean_stdev([row[4] for row in results])
+mean_rn, stdev_rn = math_extra.calc_mean_stdev([row[5] for row in results])
 
 print '\nmax:', results[0][1], 'iteration:', results[0][0]
-print 'min:', results[len(results)-1][1], 'iteration:', results[len(results) - 1][0]
+print 'min:', results[len(results) - 1][1], 'iteration:', results[len(results) - 1][0]
 print 'mean:', mean_ac
 print 'stdev:', stdev_ac
 
-means = ['mean', mean_ac, mean_pp, mean_pn, mean_pz, mean_rp, mean_rn, mean_rz]
-stdevs = ['stdev', stdev_ac, stdev_pp, stdev_pn, stdev_pz, stdev_rp, stdev_rn, stdev_rz]
+means = ['mean', mean_ac, mean_pp, mean_pn, mean_rp, mean_rn]
+stdevs = ['stdev', stdev_ac, stdev_pp, stdev_pn, stdev_rp, stdev_rn]
 results.append(means)
 results.append(stdevs)
 
-results = [header] + results
+results = [header]+results
 my_util.write_csv_file(source_dir + tabel_result_name, False, True, results)
 
 ########################################################################################################################
