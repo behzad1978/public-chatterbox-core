@@ -41,8 +41,8 @@ followups_file_name = 'followups'
 training_file_name = 'labels_and_features'#file saving training set (labels | feature-vectors) that could be read again.
 features_file_name = 'features_and_freqs'#file saving features (ngrams) in one column and freq of occurrence in another.
 seed_reply_file_name = 'seed_reply_texts'#file saving (seed | reply) texts side by side; to be read for visualisation.
-test_result_name = 'test/test_set'#file saving the actual predicted labels and values on the test set.
-tabel_result_name = 'test/tabel'
+result_name = '5/test_set'#file saving the actual predicted labels and values on the test set.
+tabel_result_name = '5/tabel'
 ########################################################################################################################
 
 def write_features_and_freqs_to_csv(features_dict, features_count_dict):
@@ -135,11 +135,6 @@ def train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params):
     #p_val --> classification values predicted by the system.
     p_label, p_acc, p_val = svmutil.svm_predict(y_test, x_test, m)
     return p_label, p_acc, p_val
-
-
-
-
-
 
 if (l_agr == +1 and l_dis == l_oth == -1):
     tabel_result_name = tabel_result_name + '_agr_rest'
@@ -367,7 +362,7 @@ for strip_thresh in strip_thresholds:
 
                 elif compound_classification == True:
 
-                    #first classify positives from the rest!
+                    #first classify positives from the rest (i.e. negatives and others)!
                     x_train_1 = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
                     s_r_texts_train_1 = s_r_texts_agr_train + s_r_texts_dis_train + s_r_texts_others_train
                     l_rest = l_dis
@@ -379,44 +374,65 @@ for strip_thresh in strip_thresholds:
                     y_test_1 = [l_agr] * len(feature_vects_agr_test) + [l_rest] * len(feature_vects_dis_test) + [
                         l_rest] * len(feature_vects_others_test)
 
+                    #the final y
+                    y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [
+                        l_oth] * len(feature_vects_others_test)
+
                     # s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
                     svm_params = '-s 1 -t 0 -n 0.5'
-                    p_label, p_acc, p_val = train_and_test_with_libsvm(y_train_1, x_train_1, y_test_1, x_test_1, svm_params)
+                    p_label_1, p_acc, p_val = train_and_test_with_libsvm(y_train_1, x_train_1, y_test_1, x_test_1, svm_params)
 
-                    prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(None, None, y_test_1, s_r_texts_test_1, p_label, [])
+                    x_sr_y1_p1_y=[]
+                    for i in xrange(0, len(x_test_1)):
+                        x_sr_y1_p1_y.append( [x_test_1[i], s_r_texts_test_1[i], y_test_1[i], p_label_1[i], y_test[i]] )
 
-                    correct_predictions_agr = [(i, p) for i, p in enumerate(prediction_result[1:]) if p[4] == 'correct' and p[2] == l_agr]
-                    correct_predictions_rest = [(i, p) for i, p in enumerate(prediction_result[1:]) if p[4] == 'correct' and p[2] == l_rest]
-                    s_r_texts_correct_predicted_agr = [s_r_texts_test_1[cpa[0]] for cpa in correct_predictions_agr]
+                    prediction_result_1, accuracy_1, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
+                        funcs.calc_prediction_stats(None, None, y_test_1, s_r_texts_test_1, p_label_1, [])
 
+                    #extra step to equalise the two classification set sizes.
+                    min_dis_others = min(len(feature_vects_dis_train), len(feature_vects_others_train))
+                    feature_vects_dis_train = feature_vects_dis_train[0:min_dis_others]
+                    feature_vects_others_train = feature_vects_others_train[0:min_dis_others]
+
+                    #second: classify disagreeds from others. This is count as a separate classification; so the training
+                    #set does not necessarily need to have any intersection with the first classification stage.
                     x_train_2 = feature_vects_dis_train + feature_vects_others_train
                     y_train_2 = [l_dis] * len(feature_vects_dis_train) + [l_oth] * len(feature_vects_others_train)
 
-                    x_test_2 = [x_test_1[cpr[1]] for cpr in correct_predictions_rest]
-                    s_r_texts_test_2 = [s_r_texts_test_1[cpr[1]] for cpr in correct_predictions_rest]
-                    y_test_2 = []
-                    for x in x_test_2:
-                        if x in feature_vects_dis_test:
-                            y_test_2.append(-1)
-                        elif x in feature_vects_others_test:
-                            y_test_2.append(0)
-                        else:
-                            raise Exception("something wrong!")
+                    #the test set is the correct predictions in the stage one that does not contain agreed tweets.
+                    temp = [row for row in x_sr_y1_p1_y if (row[2] == row[3] == l_rest)]
+                    x_test_2 = [row[0] for row in temp]
+                    s_r_texts_test_2 = [row[1] for row in temp]
+                    y_test_2 = [row[4] for row in temp]
 
-                    p_label, p_acc, p_val = train_and_test_with_libsvm(y_train_2, x_train_2, y_test_2, x_test_2)
+                    p_label_2, p_acc, p_val = train_and_test_with_libsvm(y_train_2, x_train_2, y_test_2, x_test_2, svm_params)
 
+                    x_sr_y2_p2 = []
+                    for i in xrange(0, len(x_test_2)):
+                        x_sr_y2_p2.append([x_test_2[i], s_r_texts_test_2[i], y_test_2[i], p_label_2[i]])
+
+                    prediction_result_2, accuracy_2, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
+                        funcs.calc_prediction_stats(None, None, y_test_2, s_r_texts_test_2, p_label_2, [])
+
+                    for u in x_sr_y1_p1_y:
+                        # if u[2] == l_agr:
+                        #     if u[3] == l_rest:
+                        #         u[3] = 2
+                        #     else:
+                                for v in x_sr_y2_p2:
+                                    if u[:1] == v[:1]:
+                                        u[3]=v[3]
+
+                    s_r_texts_test = [row[1] for row in x_sr_y1_p1_y]
+                    y_test = [row[4] for row in x_sr_y1_p1_y]
+                    p_label = [row[3] for row in x_sr_y1_p1_y]
                     prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(None, None, y_test_2, s_r_texts_test_2, p_label, [])
+                    funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
 
-                    s_r_texts_test_1_2 = s_r_texts_correct_predicted_pos + s_r_texts_test_2
-                    y_test_1_2 = [+1] * len(s_r_texts_correct_predicted_pos) + y_test_2
-                    p_label_1_2 = [+1] * len(s_r_texts_correct_predicted_pos) + p_label
+        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False, True, prediction_result_1)
+        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False, True, prediction_result_2)
+        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + '3-class' + '_' + str(accuracy) + '%', False, True, prediction_result)
 
-                    prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                    funcs.calc_prediction_stats(None, None, y_test_1_2, s_r_texts_test_1_2, p_label_1_2, [])
-
-        my_util.write_csv_file(source_dir + test_result_name + str(n+1) + '_' + str(accuracy) + '%', False, True, prediction_result)
         results_CrossVal.append(
             [strip_thresh, n + 1,
             len(feature_vects_agr_train), len(feature_vects_dis_train), len(feature_vects_others_train),
