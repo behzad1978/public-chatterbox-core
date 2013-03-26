@@ -3,6 +3,9 @@ __author__ = 'behzadbehzadan'
 
 from operator import itemgetter
 import re
+import my_util
+import difflib
+import stopwords
 
 #list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
@@ -33,12 +36,16 @@ def exclude_url(split_text):
             no_url_tweet_text.append(t)
     return no_url_tweet_text
 
-def check_feature(f):
+def check_feature(f, stopword_flag):
     global train_labs, shorteners
     #print train_labs
     if f == "" or f == None:
         return None
 
+    if stopword_flag:
+        stp = stopwords.stopwords['en']
+        if f in stp:
+            return False
     if f[0] == "@":
         return False
     if "http" in f:
@@ -63,10 +70,10 @@ def check_feature(f):
         return True
 
 
-def check_features(f_list):
+def check_features(f_list, stopword_flag):
     #print f_list
     for f in f_list:
-        if not (check_feature(f)):
+        if not (check_feature(f, stopword_flag)):
             return False
     return True
 
@@ -85,6 +92,7 @@ def unicode_to_float(the_list, col_nr, strt_indx):
 
 def add_to_dict(t, the_length, vector, features_dict, features_count_dict, max_index):
     try:
+        #when using svm, the indx is a dimension in the space!
         indx = features_dict[t]
     except KeyError:
         features_dict[t] = max_index
@@ -145,7 +153,7 @@ def ngrams(tweet, is_seed, separate_features_for_seed_reply, features_dict, feat
         for i in range(1, max):
             is_the_first_tok = True#adding the very first ngram to dict
             for j in xrange(0, len(tokens) - (i - 1)):
-                if check_features(tokens[j:j + i]):
+                if check_features(tokens[j:j + i], False):
 
                     t = " ".join(tokens[j:j + i])
                     if separate_features_for_seed_reply:
@@ -174,7 +182,6 @@ def ngrams(tweet, is_seed, separate_features_for_seed_reply, features_dict, feat
             max_index = add_to_dict(very_last_tok, len(tokens), vector, features_dict, features_count_dict, max_index)
 
     return vector, max_index
-
 
 def get_sparse_feature_vector(s_r_list, text_indx, sep_s_r_features, features_dict, features_count_dict, max_index):
     """
@@ -235,7 +242,102 @@ def create_labels_and_features(features_dict, features_count_dict, max_index,
 
     return feature_vects_agr, s_r_texts_agr, feature_vects_dis, s_r_texts_dis, feature_vects_others, s_r_texts_others, max_index
 
+def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n):
+    """
+    this provides a term-frequency vector
+    """
+    vector = dict()
+    #print tweet
+    split_tweet_text = tweet.lower().split()
 
+    no_url_tweet_text = exclude_url(split_tweet_text)
+    tweet_text = " ".join(no_url_tweet_text)
+    #print tweet_text
+    ##put a space between any non punct char and a punct char
+    tweet_text = re.sub(r"([^'\".,;:/?\!@#£$%^&*()_\-=+`~])(['\".,;:/?\!@#£$%^&*()_\-=+`~])", r"\1 \2", tweet_text)
+    #print tweet_text
+    ##put a space between any punct char and a non punct char
+    tweet_text = re.sub(r"(['\".,;:/?\!£$%^&*()_\-=+`~])([^'\".,;:/?\!@#£$%^&*()_\-=+`~#@])", r"\1 \2", tweet_text)
+    #print tweet_text
+    #stick heart symbols back together
+    tweet_text = re.sub(" < 3 ", " <3 ", tweet_text)
+    tweet_text = re.sub(" : d ", " :d ", tweet_text)
+    tweet_text = re.sub(" : p ", " :p ", tweet_text)
+
+    #print tweet_text
+    #stick n't back together
+    tweet_text = re.sub(r"(\w)n ' t\b", r"\1 n't", tweet_text)
+    #print tweet_text
+    tweet_text = re.sub(r" ([:;][-]?) ([DP]) ", r"\1\2", tweet_text)
+    #print tweet_text
+    #concatinate any letter that is repeated more than 3 times. like: 'yesssss' to 'yesss' or 'nooooo' to 'nooo'.
+    #\s represents any non-whitespace character. \1 matches the same character 1 time.
+    tweet_text = re.sub(r"(\S)\1\1+", r"\1\1\1", tweet_text)
+
+    tokens = tweet_text.split()
+
+    #i --> the length of the token
+    #j --> starting index of the token
+    #sometimes tokens may be empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
+    nr_of_features = 0
+    stopword_flag = False
+    if len(tokens) > 0:
+        for i in range(m, n + 1):
+            # if i == 1:
+            #     stopword_flag = True
+            for j in xrange(0, len(tokens) - (i - 1)):
+                if check_features(tokens[j:j + i], stopword_flag):
+                    nr_of_features += 1
+                    t = " ".join(tokens[j:j + i])
+                    #note: vector, features_dict, features_count_dict are passed by reference
+                    #only max_index must be returned, as its value changes inside the method.
+                    #max_index = add_to_dict(t, len(tokens), vector, features_dict, features_count_dict, max_index)
+
+                    if t not in features_dict:
+                        max_index += 1
+                        features_dict[t] = max_index
+                        features_count_dict[max_index] = 0
+
+                    #a is the address or dimension number
+                    a = features_dict[t]
+
+                    if a not in vector:
+                        vector[a] = 0
+
+                    vector[a] += 1
+                    features_count_dict[a] += 1
+
+        #divide all elements of the vector by the number of traversed features.
+        #this is more correct than the dividing by len(tokens).
+        #this is because the number of ngrams (addressed in a vector) is not necessarily equal to the number of features.
+        vector = {a : float(c)/nr_of_features for a, c in vector.iteritems()}
+
+    return vector, max_index
+
+
+def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n):
+
+    feature_vectors = []
+    tweet_texts = []
+    for tweet in tweet_list:
+        vector, max_index = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n)
+        feature_vectors.append(vector)
+        #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
+        # during the loop.
+        tweet_texts.append(tweet)
+
+    return feature_vectors, tweet_texts, max_index
+
+
+def write_features_and_freqs_to_csv(features_dict, features_count_dict, thresh, filename):
+    feature_freq_list = []
+    for f, a in features_dict.iteritems():
+        c = features_count_dict[a]
+        if c > thresh:
+            feature_freq_list.append([f, c])
+        else:
+            pass
+    my_util.write_csv_file(filename, False, True, feature_freq_list)
 
 def get_features_dict_reverse(features_dict):
     """
@@ -357,22 +459,23 @@ def remove_duplicates(set_of_seed_reply_tupples):
             noDuplicate.append(dup)
     return noDuplicate
 
-def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_test, s_r_texts_test, p_label, p_val):
+def calc_prediction_stats(thresh_pos, thresh_neg, y_test, s_r_texts_test, p_label, p_val):
     prediction_result=[]
-    if train_with_liblinear_flag:
+    if p_val<>[]:
         header = ['seed', 'reply', 'original_label', 'predicted_label', 'predicted_value', 'prediction_success']
     else:
         header = ['seed', 'reply', 'original_label', 'predicted_label', 'prediction_success']
     prediction_result.append(header)
     true_pos = true_neg = true_zero = 0
     false_pos = false_neg = false_zero = 0
+    nPos = nNeg = nZer = 0
     for i in range(0, len(s_r_texts_test)):
         s_r_text = s_r_texts_test[i]
         seed = s_r_text[0]
         reply = s_r_text[1]
         original_label = y_test[i]
         predicted_label = int(p_label[i])
-        if train_with_liblinear_flag:
+        if p_val<>[]:
             predicted_value = p_val[i]
             if predicted_value[0] > thresh_pos:
                 predicted_label = +1
@@ -384,6 +487,7 @@ def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_t
         prediction = 'wrong'
 
         if original_label == +1:
+            nPos +=1
             if predicted_label == +1:
                 prediction = 'correct'
                 true_pos += 1
@@ -392,6 +496,7 @@ def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_t
             elif predicted_label == 0:
                 false_zero += 1
         elif original_label == -1:
+            nNeg +=1
             if predicted_label == -1:
                 prediction = 'correct'
                 true_neg += 1
@@ -400,6 +505,7 @@ def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_t
             elif predicted_label == 0:
                 false_zero += 1
         elif original_label == 0:
+            nZer +=1
             if predicted_label == 0:
                 prediction = 'correct'
                 true_zero += 1
@@ -407,7 +513,7 @@ def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_t
                 false_pos += 1
             elif predicted_label == -1:
                 false_neg += 1
-        if train_with_liblinear_flag:
+        if p_val<>[]:
             prediction_result.append([seed, reply, original_label, predicted_label, predicted_value, prediction])
         else:
             #in this case there is no 'predicted_value'
@@ -428,16 +534,58 @@ def calc_prediction_stats(train_with_liblinear_flag, thresh_pos, thresh_neg, y_t
     except ZeroDivisionError:#let the value be zero in this case!
         pass
     try:
-        recall_pos = round(float(true_pos) / (true_pos + false_neg + false_zero), 2)
+        recall_pos = round(float(true_pos) / nPos, 2)
     except ZeroDivisionError:#let the value be zero in this case!
         pass
     try:
-        recall_neg = round(float(true_neg) / (true_neg + false_pos + false_zero), 2)
+        recall_neg = round(float(true_neg) / nNeg, 2)
     except ZeroDivisionError:#let the value be zero in this case!
         pass
     try:
-        recall_zero = round(float(true_zero) / (true_zero + false_pos + false_neg), 2)
+        recall_zero = round(float(true_zero) / nZer, 2)
     except ZeroDivisionError:#the value would be zero in this case!
         pass
 
     return prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero
+
+def remove_duplicate_tweets(tweets_list, use_quick_ratio, thresh):
+    clustered_tweets = []#cluster duplicated/similar tweets together
+    while len(tweets_list) > 0:
+        t = tweets_list[0]
+        if use_quick_ratio:
+            #using the quick_ratio() is very time consuming!
+            #note that without lower-casing the strings, the quick_ratio() does not work correctly.
+            #so the string must have become lower-case before.
+            duplicates = [s for s in tweets_list if difflib.SequenceMatcher(None, s, t).quick_ratio() > thresh]
+        else:
+            #note: the string must have become lower-case before this stage.
+            duplicates = [s for s in tweets_list if s == t]
+
+        clustered_tweets.append([t, len(duplicates)])
+        tweets_list = [x for x in tweets_list if x not in duplicates]
+        if len(duplicates) > 1:
+            print len(duplicates), 'duplicate: ', t
+            for d in duplicates:
+                print d
+        print 'removing duplicates ... tweets remained:', len(tweets_list)
+    unique_tweets = [d[0] for d in clustered_tweets]#take one element from each cluster
+    return unique_tweets#ß, clustered_tweets
+
+
+def truncate_and_remove_duplicates(tweets, trunc_size):
+    #a trunc_size of 2 or 3 sounds reasonable!
+    clustered_tweets = []#cluster duplicated/similar tweets together
+
+    #split tweet texts
+    truncs = [t.split() for t in tweets]
+    #truncate the beginning and the end of tweets
+    truncs = [t[trunc_size : len(t) - trunc_size] for t in truncs if len(t) > 2*trunc_size]
+    #stick back the split truncated tweets
+    truncs = [' '.join(t) for t in truncs]
+    #this dict is used to retrieve original tweets later
+    trunc_tweet_dict = dict( zip(truncs, tweets) )
+
+    unique_truncs = remove_duplicate_tweets(truncs, False, None)
+    unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
+
+    return unique_tweets

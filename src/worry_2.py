@@ -1,10 +1,16 @@
 __author__ = 'behzadbehzadan'
 
+"""
+In the older version, there were two dicts: one for positive set and another for negative set. This doesn't seem to have
+any advantage. So, in this version we only use one dict for both of the negative and positive sets. Only for trainig and
+test set we use two different dicts to strip non-frequent tokens independently from training and test sets.
+"""
+
 import my_util
 import os
 import funcs
 import operator
-import string
+import re
 
 source_dir = os.path.expanduser('~')
 file_dir = '/Chatterbox_UCL_Advance/Worry/'
@@ -32,6 +38,10 @@ if remove_retweets:
         tweets = [t.lower() for t in tweets]
         #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
         tweets = [' '.join(t.split())]
+        #put a space between any non punct char and a punct char
+        tweets = [re.sub(r"(?u)(\w)(\W)", r"\1 \2", t) for t in tweets]
+        #put a space between any punct char and a non punct char
+        tweets = [re.sub(r"(?u)(\W)([\w@#])", r"\1 \2", t) for t in tweets]
         #remove duplicates by direct comparison of strings
         tweets = funcs.remove_duplicate_tweets(tweets, False, None)
         #remove duplicates by direct comparison of the truncated strings
@@ -72,36 +82,39 @@ print 'not_' + collection_name + ':', len(negatives)
 my_util.write_csv_file(source_dir + file_dir + 'not_' + collection_name, False, True, [[t] for t in negatives])
 my_util.write_csv_file(source_dir + file_dir + collection_name, False, True, [[t] for t in positives])
 
-#{'feature':feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
-features_dict_pos = dict()
-features_dict_neg = dict()
+# {'feature':feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
+# when using svm, an address represents a dimension on the space.
+# So it is important to keep the address consistent for positive and negative sets and also for training and test sets.
+features_dict = dict()
 #{'feature_address (dimension no) : feature} --> used for debugging to visualise features
-features_dict_reverse_pos = dict()
-features_dict_reverse_neg = dict()
+features_dict_reverse = dict()
 #{feature_address (dimension no.) : freq_count} --> freq_count: absolute freq of ngram occurring in token.
-features_count_dict_pos = dict()
-features_count_dict_neg = dict()
+features_count_dict = dict()
 #whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
-max_index_pos = 1
-max_index_neg = 1
+max_index = 0
 
-def create_feature_Vector(tweets, features_dict, features_count_dict, max_index, m, n):
-    #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
-    #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-    vectors = []
-    for t in tweets:
-        vector, tokens_length, max_index = funcs.get_ngrams_worry(t, features_dict, features_count_dict, max_index, m, n)
-        vectors.append([vector, tokens_length])
-    return vectors
+#m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
+m=1
+#length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
+n=1
 
 print 'creating feature vectors...'
-vectors_pos = create_feature_Vector(positives, features_dict_pos, features_count_dict_pos, max_index_pos, 1, 1)
-vectors_neg = create_feature_Vector(negatives, features_dict_neg, features_count_dict_neg, max_index_neg, 1, 1)
-print 'finished creating feature vectors!'
 
-visualising_thresh = 50
-funcs.write_features_and_freqs_to_csv(features_dict_pos, features_count_dict_pos, visualising_thresh, source_dir + file_dir + collection_name + "_count_pos")
-funcs.write_features_and_freqs_to_csv(features_dict_neg, features_count_dict_neg, visualising_thresh, source_dir + file_dir + collection_name + "_count_neg")
+feature_vects_pos, tweets_pos, max_index = funcs.get_sparse_feature_vector_worry(positives, features_dict,
+                                                                           features_count_dict, max_index, m, n)
+
+feature_vects_neg, tweets_neg, max_index = funcs.get_sparse_feature_vector_worry(negatives, features_dict,
+                                                                           features_count_dict, max_index, m, n)
+
+#feature_vects_oth, tweets_oth, max_index = funcs.get_sparse_feature_vector_worry(others, features_dict,
+#                                                                           features_count_dict, max_index, m, n)
+
+print 'feature vectors created!'
+print 'no of features:', len(features_dict)
+
+# visualising_thresh = 50
+# funcs.write_features_and_freqs_to_csv(feature_vects_pos, features_count_dict_pos, visualising_thresh, source_dir + file_dir + collection_name + "_count_pos")
+# funcs.write_features_and_freqs_to_csv(feature_vects_neg, features_count_dict_neg, visualising_thresh, source_dir + file_dir + collection_name + "_count_neg")
 
 def find_double_keywords(list):
     worried_worried = []
@@ -120,30 +133,22 @@ keyword_keyword_neg = find_double_keywords(negatives)
 my_util.write_csv_file(source_dir + file_dir + collection_name + '_' + collection_name + '_' + 'pos', False, True, keyword_keyword_pos)
 my_util.write_csv_file(source_dir + file_dir + collection_name + '_' + collection_name + '_' + 'neg', False, True, keyword_keyword_neg)
 
-all_features = list((set(features_dict_neg.keys())).union(set(features_dict_pos.keys())))
-print 'no of features:', len(all_features)
 
-prob_thresh = 0.50
+prob_thresh = 0.69
 high_prob_features_pos=[]
 high_prob_features_neg=[]
 print 'calculating probabilities...'
 c=0
-for f in all_features:
+for f, a in features_dict.iteritems():
 
     c+=1
     m = operator.mod(c, 1000)
     if m==0:
         print c
 
-    neg_tweets_containing_f = []
-    if f in features_dict_neg:
-        a = features_dict_neg[f]
-        neg_tweets_containing_f = [v for v, l in vectors_neg if a in v]#Note: a in v is exactly the same as v.has_key(a)
+    neg_tweets_containing_f = [v for v in feature_vects_neg if a in v]#Note: a in v is exactly the same as v.has_key(a)
 
-    pos_tweets_containing_f = []
-    if f in features_dict_pos:
-        a = features_dict_pos[f]
-        pos_tweets_containing_f = [v for v, l in vectors_pos if a in v]
+    pos_tweets_containing_f = [v for v in feature_vects_pos if a in v]
 
     p = len(pos_tweets_containing_f)
     n = len(neg_tweets_containing_f)
