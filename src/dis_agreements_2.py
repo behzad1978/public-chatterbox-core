@@ -556,14 +556,14 @@ def go_train(x, y, all_seed_reply_texts, trial_nr):
 
 def read_files():
     #original agreed tweets read line by line from a csv file. The first row is the header.
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
-    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
+    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, False, True)
+    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, False, True)
+    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, False, True)
     #original disagreed tweets read line by line from a csv file. The first row is the header.
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
-    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
-    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
-    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
+    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, False, True)
+    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, False, True)
+    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, False, True)
+    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, False, True)
 
     header = agreed_pairs[0]
     conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
@@ -598,7 +598,7 @@ def read_files():
 
 if read_training_data_from_file:
     y, x = liblinearutil.svm_read_problem(source_dir + training_file_name + '.csv')
-    all_seed_reply_texts = my_util.read_csv_file(source_dir + seed_reply_file_name, True)
+    all_seed_reply_texts = my_util.read_csv_file(source_dir + seed_reply_file_name, False, True)
 else:
     seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx = read_files()
     x, y, all_seed_reply_texts = create_labels_and_features(seed_reply_agreed, seed_reply_disagreed, seed_reply_others, text_indx)

@@ -1,4 +1,9 @@
 __author__ = 'behzadbehzadan'
+"""
+This version is a complete version which also does the two-stage (one agianst one) classification.
+First the agreed sets are classified from the disagreeds and others; second, the disagreed and others are classified fro
+each other.
+"""
 
 import my_util
 import os
@@ -19,10 +24,16 @@ train_with_svm = True
 duplicate_disagreed_set = False
 #strip features less than 'strip_thresh'. If set to 0, nothing happens. If set to 1, single features are removed.
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
+#to classify agreed from the rest (binary classification): +1, -1, -1
+#to classify disagreed from the rest (binary classification): +1, -1, +1
+#to make a 3-class classification: +1, -1, 0
 l_agr = +1
 l_dis = -1
-l_oth = 0
-compound_classification = True
+l_oth = -1
+#this option is used to make a 3-class classification with two successive stage of binary classification with svm.
+#we have not implemented the same technique with liblinear as the binary classification performance with liblinear and
+#libsvm are very close.
+one_against_one = True
 ########################################################################################################################
 
 ###################################################### file names ######################################################
@@ -41,19 +52,9 @@ followups_file_name = 'followups'
 training_file_name = 'labels_and_features'#file saving training set (labels | feature-vectors) that could be read again.
 features_file_name = 'features_and_freqs'#file saving features (ngrams) in one column and freq of occurrence in another.
 seed_reply_file_name = 'seed_reply_texts'#file saving (seed | reply) texts side by side; to be read for visualisation.
-result_name = '5/test_set'#file saving the actual predicted labels and values on the test set.
-tabel_result_name = '5/tabel'
+result_name = 'test/test_set'#file saving the actual predicted labels and values on the test set.
+tabel_result_name = 'test/tabel'
 ########################################################################################################################
-
-def write_features_and_freqs_to_csv(features_dict, features_count_dict):
-    feature_freq_list = []
-    for f, a in features_dict.iteritems():
-        c = features_count_dict[a]
-        if c > 1:
-            feature_freq_list.append([f, c])
-        else:
-            pass
-    my_util.write_csv_file(source_dir + features_file_name, False, True, feature_freq_list)
 
 def write_labels_and_features_to_csv(labels, features):
     """
@@ -75,14 +76,14 @@ def write_labels_and_features_to_csv(labels, features):
 
 def read_data():
     #original agreed tweets read line by line from a csv file. The first row is the header.
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
-    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
+    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, False, True)
+    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, False, True)
+    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, False, True)
     #original disagreed tweets read line by line from a csv file. The first row is the header.
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
-    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
-    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
-    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
+    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, False, True)
+    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, False, True)
+    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, False, True)
+    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, False, True)
 
     header = agreed_pairs[0]
     conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
@@ -115,7 +116,7 @@ def read_data():
 seed_reply_agreeds, seed_reply_disagreeds, seed_reply_others, text_indx = read_data()
 
 def train_and_test_with_liblinear(y_train, x_train, y_test, x_test):
-    print 'training in progress with liblinear ...'
+    print 'training with liblinear in progress ...'
     prob = liblinearutil.problem(y_train, x_train)
     param = liblinearutil.parameter('-c 1 -B 1')
     m = liblinearutil.train(prob, param)
@@ -153,7 +154,7 @@ if (l_dis == -1 and l_agr == l_oth == +1):
         seed_reply_others = random.sample(seed_reply_others, len(seed_reply_disagreeds)/2)
 if (l_agr == +1 and l_dis == -1 and l_oth == 0):
     tabel_result_name = tabel_result_name + '_3-Class'
-    if compound_classification:
+    if one_against_one:
         #we want: agreed set size = disagreed set size + others set size
         seed_reply_others = random.sample(seed_reply_others, len(seed_reply_agreeds) - len(seed_reply_disagreeds))
 
@@ -267,8 +268,8 @@ for strip_thresh in strip_thresholds:
             feature_vects_dis_test = funcs.strip_less_than(feature_vects_dis_test, features_count_dict_test, strip_thresh)
             feature_vects_others_test = funcs.strip_less_than(feature_vects_others_test, features_count_dict_test, strip_thresh)
 
-        if train_with_liblinear and train_with_svm:
-            raise Exception('both of the liblinear and libsvm flags are True! Just one must be True!')
+        if train_with_liblinear == train_with_svm:
+            raise Exception('The liblinear and libsvm flags are either both True or both False!')
 
         if train_with_liblinear:
 
@@ -335,11 +336,11 @@ for strip_thresh in strip_thresholds:
                 svm_params = '-s 1 -t 0 -n 0.5'
                 p_label, p_acc, p_val = train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
                 prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                    funcs.calc_prediction_stats(thresh_pos, thresh_neg, y_test, s_r_texts_test, p_label, [])
+                    funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
 
             if (l_agr == +1 and l_dis == -1 and l_oth == 0):
 
-                if compound_classification == False:
+                if one_against_one == False:
 
                     #this is a 3-class classification
                     x_train = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
@@ -358,35 +359,32 @@ for strip_thresh in strip_thresholds:
                     svm_params = ' -s 0 -c 1 -t 0 -w1 1 -w-1 2.7 -w0 1'
                     p_label, p_acc, p_val = train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
                     prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(thresh_pos, thresh_neg, y_test, s_r_texts_test, p_label, [])
+                        funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
 
-                elif compound_classification == True:
+                elif one_against_one == True:
 
-                    #first classify positives from the rest (i.e. negatives and others)!
+                    #first classify agreed from the rest (i.e. disagreed and others)!
                     x_train_1 = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
                     s_r_texts_train_1 = s_r_texts_agr_train + s_r_texts_dis_train + s_r_texts_others_train
                     l_rest = l_dis
-                    y_train_1 = [l_agr] * len(feature_vects_agr_train) + [l_rest] * len(feature_vects_dis_train) + [
-                        l_rest] * len(feature_vects_others_train)
+                    y_train_1 = [l_agr] * len(feature_vects_agr_train) + [l_rest] * len(feature_vects_dis_train) + [l_rest] * len(feature_vects_others_train)
 
                     x_test_1 = feature_vects_agr_test + feature_vects_dis_test + feature_vects_others_test
                     s_r_texts_test_1 = s_r_texts_agr_test + s_r_texts_dis_test + s_r_texts_others_test
-                    y_test_1 = [l_agr] * len(feature_vects_agr_test) + [l_rest] * len(feature_vects_dis_test) + [
-                        l_rest] * len(feature_vects_others_test)
+                    y_test_1 = [l_agr] * len(feature_vects_agr_test) + [l_rest] * len(feature_vects_dis_test) + [l_rest] * len(feature_vects_others_test)
 
                     #the final y
-                    y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [
-                        l_oth] * len(feature_vects_others_test)
+                    y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [l_oth] * len(feature_vects_others_test)
 
                     # s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
                     svm_params = '-s 1 -t 0 -n 0.5'
                     p_label_1, p_acc, p_val = train_and_test_with_libsvm(y_train_1, x_train_1, y_test_1, x_test_1, svm_params)
 
-                    x_sr_y1_p1_y=[]
-                    for i in xrange(0, len(x_test_1)):
-                        x_sr_y1_p1_y.append( [x_test_1[i], s_r_texts_test_1[i], y_test_1[i], p_label_1[i], y_test[i]] )
+                    #make a side by side matrix
+                    nRows = len(y_test)
+                    x_sr_y1_p1_y = [ [x_test_1[i], s_r_texts_test_1[i], y_test_1[i], p_label_1[i], y_test[i]] for i in xrange(nRows) ]
 
-                    prediction_result_1, accuracy_1, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
+                    prediction_result_1, accuracy_1, precision_pos_1, precision_neg_1, precision_zero_1, recall_pos_1, recall_neg_1, recall_zero_1 = \
                         funcs.calc_prediction_stats(None, None, y_test_1, s_r_texts_test_1, p_label_1, [])
 
                     #extra step to equalise the two classification set sizes.
@@ -394,44 +392,45 @@ for strip_thresh in strip_thresholds:
                     feature_vects_dis_train = feature_vects_dis_train[0:min_dis_others]
                     feature_vects_others_train = feature_vects_others_train[0:min_dis_others]
 
-                    #second: classify disagreeds from others. This is count as a separate classification; so the training
-                    #set does not necessarily need to have any intersection with the first classification stage.
+                    #second: classify disagreeds from others. This is count as a separate classification;
+                    #the training set does not need to have any intersection with the first classification stage.
                     x_train_2 = feature_vects_dis_train + feature_vects_others_train
                     y_train_2 = [l_dis] * len(feature_vects_dis_train) + [l_oth] * len(feature_vects_others_train)
 
                     #the test set is the correct predictions in the stage one that does not contain agreed tweets.
-                    temp = [row for row in x_sr_y1_p1_y if (row[2] == row[3] == l_rest)]
-                    x_test_2 = [row[0] for row in temp]
-                    s_r_texts_test_2 = [row[1] for row in temp]
-                    y_test_2 = [row[4] for row in temp]
+                    nCol = len(x_sr_y1_p1_y[0])
+                    columns = [ [row[i] for row in x_sr_y1_p1_y if (row[2] == row[3] == l_rest)] for i in xrange(nCol) ]
+                    x_test_2 = columns[0]
+                    s_r_texts_test_2 = columns[1]
+                    y_test_2 = columns[4]
 
                     p_label_2, p_acc, p_val = train_and_test_with_libsvm(y_train_2, x_train_2, y_test_2, x_test_2, svm_params)
 
-                    x_sr_y2_p2 = []
-                    for i in xrange(0, len(x_test_2)):
-                        x_sr_y2_p2.append([x_test_2[i], s_r_texts_test_2[i], y_test_2[i], p_label_2[i]])
+                    #make a side by side matrix
+                    x_sr_y2_p2 = [ [x_test_2[i], s_r_texts_test_2[i], y_test_2[i], p_label_2[i]] for i in xrange(len(y_test_2)) ]
 
                     prediction_result_2, accuracy_2, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
                         funcs.calc_prediction_stats(None, None, y_test_2, s_r_texts_test_2, p_label_2, [])
 
+                    #copy the predicted labels obtained in stage two to the corresponding labels in stage one.
                     for u in x_sr_y1_p1_y:
-                        # if u[2] == l_agr:
-                        #     if u[3] == l_rest:
-                        #         u[3] = 2
-                        #     else:
-                                for v in x_sr_y2_p2:
-                                    if u[:1] == v[:1]:
-                                        u[3]=v[3]
+                        for v in x_sr_y2_p2:
+                            if u[:1] == v[:1]:
+                                u[3]=v[3]
 
                     s_r_texts_test = [row[1] for row in x_sr_y1_p1_y]
                     y_test = [row[4] for row in x_sr_y1_p1_y]
                     p_label = [row[3] for row in x_sr_y1_p1_y]
+
+                    #note that the precision_neg is a bit distorted since a false negative in the first stage could in
+                    #belong to either the negative set or the zero set that will be classified in the second stage.
                     prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
                     funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
 
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False, True, prediction_result_1)
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False, True, prediction_result_2)
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + '3-class' + '_' + str(accuracy) + '%', False, True, prediction_result)
+                    my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False, True, prediction_result_1)
+                    my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False, True, prediction_result_2)
+
+        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + str(accuracy) + '%', False, True, prediction_result)
 
         results_CrossVal.append(
             [strip_thresh, n + 1,
@@ -459,4 +458,4 @@ for strip_thresh in strip_thresholds:
 # print 'mean:', results[len(results) - 2][header.index('accuracy')]
 # print 'stdev:', results[len(results) - 1][header.index('accuracy')]
 
-my_util.write_csv_file(source_dir + tabel_result_name, False, True, results)
+my_util.write_csv_file(source_dir + tabel_result_name + '_' + str(means[header.index('accuracy')]) + '%', False, True, results)

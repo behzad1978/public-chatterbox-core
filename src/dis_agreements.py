@@ -327,8 +327,8 @@ def extract_training_and_test_data(y, x, all_seed_reply_texts):
 def read_tweet_files():
     #read the csv files. The first row is the header.
     global agreed_pairs, disagreed_pairs, conv_id_indx, tweet_id_indx, text_indx
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
+    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, False, True)
+    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, False, True)
 
     header = agreed_pairs[0]
 
@@ -346,7 +346,7 @@ def go_train():
 
     if read_training_data_from_file:
         y, x = liblinearutil.svm_read_problem(source_dir + training_file_name + '.csv')
-        all_seed_reply_texts = my_util.read_csv_file(source_dir+seed_reply_file_name, True)
+        all_seed_reply_texts = my_util.read_csv_file(source_dir + seed_reply_file_name, False, True)
     else:
         seed_reply_agreed = make_seed_reply_list(agreed_pairs)
         seed_reply_disagreed = make_seed_reply_list(disagreed_pairs)

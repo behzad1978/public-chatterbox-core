@@ -1,7 +1,7 @@
 __author__ = 'behzadbehzadan'
 """
 This version is exactly similar to version 5, but in the first stage disagreeds are classified from agreeds and others
-and in the second stage the agreeds are classified from others.
+and in the second stage the agreeds are classified from others. For detail comments of methods, look at dis_agreement_5.
 """
 
 import my_util
@@ -79,14 +79,14 @@ def write_labels_and_features_to_csv(labels, features):
 
 def read_data():
     #original agreed tweets read line by line from a csv file. The first row is the header.
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
-    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
+    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, False, True)
+    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, False, True)
+    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, False, True)
     #original disagreed tweets read line by line from a csv file. The first row is the header.
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
-    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
-    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
-    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
+    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, False, True)
+    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, False, True)
+    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, False, True)
+    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, False, True)
 
     header = agreed_pairs[0]
     conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
@@ -162,9 +162,9 @@ if (l_agr == +1 and l_dis == -1 and l_oth == 0):
             #we want: agreed set size = disagreed set size + others set size
             seed_reply_agreeds = random.sample(seed_reply_agreeds, len(seed_reply_disagreeds) / 2)
             seed_reply_others = random.sample(seed_reply_others, len(seed_reply_disagreeds) / 2)
-        # else:
-        #     seed_reply_agreeds = random.sample(seed_reply_agreeds, len(seed_reply_disagreeds))
-        #     seed_reply_others = random.sample(seed_reply_others, len(seed_reply_disagreeds))
+        else:
+            seed_reply_agreeds = random.sample(seed_reply_agreeds, len(seed_reply_disagreeds))
+            seed_reply_others = random.sample(seed_reply_others, len(seed_reply_disagreeds))
 
 table_name_flag=True
 
@@ -380,6 +380,14 @@ for strip_thresh in strip_thresholds:
                     l_rest = l_agr
                     y_train_1 = [l_rest] * len(feature_vects_agr_train) + [l_dis] * len(feature_vects_dis_train) + [l_rest] * len(feature_vects_others_train)
 
+                    #extra step to have consistent test-set size when duplicating disagreed set:
+                    if duplicate_disagreed_set:
+                        length = len(feature_vects_dis_test)/2
+                        feature_vects_agr_test = feature_vects_agr_test[0:length]
+                        feature_vects_others_test = feature_vects_others_test[0:length]
+                        s_r_texts_agr_test = s_r_texts_agr_test[0:length]
+                        s_r_texts_others_test = s_r_texts_others_test[0:length]
+
                     x_test_1 = feature_vects_agr_test + feature_vects_dis_test + feature_vects_others_test
                     s_r_texts_test_1 = s_r_texts_agr_test + s_r_texts_dis_test + s_r_texts_others_test
                     y_test_1 = [l_rest] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [l_rest] * len(feature_vects_others_test)
@@ -433,9 +441,9 @@ for strip_thresh in strip_thresholds:
                     prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
                     funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
 
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False, True, prediction_result_1)
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False, True, prediction_result_2)
-        my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + '3-class' + '_' + str(accuracy) + '%', False, True, prediction_result)
+                    my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False, True, prediction_result_1)
+                    my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False, True, prediction_result_2)
+                my_util.write_csv_file(source_dir + result_name + str(n+1) + '_' + '3-class' + '_' + str(accuracy) + '%', False, True, prediction_result)
 
         results_CrossVal.append(
             [strip_thresh, n + 1,

@@ -19,13 +19,13 @@ use_qr_to_remove_dups = False
 
 if remove_retweets:
     try:
-        tweets_noDup = my_util.read_csv_file(source_dir + file_dir + source_file_noDup, True)
+        tweets_noDup = my_util.read_csv_file(source_dir + file_dir + source_file_noDup, False, True)
         tweets = [t[0] for t in tweets_noDup]
         tweets = [t.lower() for t in tweets]
         tweets = [' '.join(t.split()) for t in tweets]#this part removes extra spaces that may exist between words.
     except IOError:
         #read the source file --> [[text1], [text2], [test3], ...]
-        tweets = my_util.read_csv_file(source_dir + file_dir + source_file, True)
+        tweets = my_util.read_csv_file(source_dir + file_dir + source_file, False, True)
         #create list of texts --> [text1, text2, text3, ...]
         tweets = [t[0] for t in tweets]
         #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio

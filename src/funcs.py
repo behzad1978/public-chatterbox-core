@@ -242,7 +242,7 @@ def create_labels_and_features(features_dict, features_count_dict, max_index,
 
     return feature_vects_agr, s_r_texts_agr, feature_vects_dis, s_r_texts_dis, feature_vects_others, s_r_texts_others, max_index
 
-def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n):
+def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
     """
     this provides a term-frequency vector
     """
@@ -280,47 +280,53 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n)
     #j --> starting index of the token
     #sometimes tokens may be empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
     nr_of_features = 0
-    stopword_flag = False
     if len(tokens) > 0:
         for i in range(m, n + 1):
-            # if i == 1:
-            #     stopword_flag = True
+            stpwd_flag = False
+            if remove_stpwds_for_unigrams:
+                if i == 1:
+                    stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
-                if check_features(tokens[j:j + i], stopword_flag):
+                if check_features(tokens[j:j + i], stpwd_flag):
                     nr_of_features += 1
                     t = " ".join(tokens[j:j + i])
-                    #note: vector, features_dict, features_count_dict are passed by reference
-                    #only max_index must be returned, as its value changes inside the method.
-                    #max_index = add_to_dict(t, len(tokens), vector, features_dict, features_count_dict, max_index)
 
-                    if t not in features_dict:
-                        max_index += 1
-                        features_dict[t] = max_index
-                        features_count_dict[max_index] = 0
+                    if new_normalisation_flag:
+                        if t not in features_dict:
+                            max_index += 1
+                            features_dict[t] = max_index
+                            features_count_dict[max_index] = 0
 
-                    #a is the address or dimension number
-                    a = features_dict[t]
+                        #a is the address or dimension number
+                        a = features_dict[t]
 
-                    if a not in vector:
-                        vector[a] = 0
+                        if a not in vector:
+                            vector[a] = 0
 
-                    vector[a] += 1
-                    features_count_dict[a] += 1
+                        vector[a] += 1
+                        features_count_dict[a] += 1
+                    else:
+                        #note: vector, features_dict, features_count_dict are passed by reference
+                        #only max_index must be returned, as its value changes inside the method.
+                        max_index = add_to_dict(t, len(tokens), vector, features_dict, features_count_dict, max_index)
 
-        #divide all elements of the vector by the number of traversed features.
-        #this is more correct than the dividing by len(tokens).
-        #this is because the number of ngrams (addressed in a vector) is not necessarily equal to the number of features.
-        vector = {a : float(c)/nr_of_features for a, c in vector.iteritems()}
+        # The following line is performed when the i-loop is finished. This is because, for a given tweet_text, the
+        # representing feature-vector must include values of all ngrams extracted from the text.
+        if new_normalisation_flag:
+            # Divide all elements of the vector by the number of traversed features.
+            # This is more correct than the division by len(tokens), as the no. of ngrams (addressed in a vector) is not
+            # necessarily equal to the number of features.
+            vector = {a : float(c)/nr_of_features for a, c in vector.iteritems()}
 
     return vector, max_index
 
 
-def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n):
+def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
 
     feature_vectors = []
     tweet_texts = []
     for tweet in tweet_list:
-        vector, max_index = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n)
+        vector, max_index = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
         feature_vectors.append(vector)
         #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
         # during the loop.
@@ -589,3 +595,22 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
     unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
 
     return unique_tweets
+
+
+def write_labels_and_features_to_csv(labels, features, file_name):
+    """
+    this function creates a tab deliminator csv file of the labels and features in the form of:
+    label dimention_nr1:feature1 dimention_nr2:feature2 ...
+    """
+    #labels --> [+1,+1,+1...,+1] or [-1,-1,-1,...,-1]
+    #features --> [dict1, dict2, dict3, ...]
+    #dicts ---> {feature_address1 : feature_freq1, feature_address2 : feature_freq2, ...]
+    final_list = []
+    if len(labels) == len(features):
+        for i in range(0, len(labels)):
+            l = labels[i]
+            feature_dict = features[i]
+            feature_list = [str(k) + ":" + str(v) for k, v in feature_dict.iteritems()]
+            the_list = [str(l)] + feature_list
+            final_list.append(the_list)
+    my_util.write_csv_file(file_name, True, True, final_list)

@@ -76,14 +76,14 @@ def write_labels_and_features_to_csv(labels, features):
 
 def read_data():
     #original agreed tweets read line by line from a csv file. The first row is the header.
-    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, True)
-    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, True)
-    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, True)
+    agreed_pairs = my_util.read_csv_file(source_dir + agreed_file_name, False, True)
+    positive_answers_pairs = my_util.read_csv_file(source_dir + positive_answers_file_name, False, True)
+    supportive_pairs = my_util.read_csv_file(source_dir + supportive_pairs_file_name, False, True)
     #original disagreed tweets read line by line from a csv file. The first row is the header.
-    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, True)
-    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, True)
-    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, True)
-    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, True)
+    disagreed_pairs = my_util.read_csv_file(source_dir + disagreed_file_name, False, True)
+    negative_answers_pairs = my_util.read_csv_file(source_dir + negative_answers_file_name, False, True)
+    offensive_pairs = my_util.read_csv_file(source_dir + offensive_sarcastic_tweets, False, True)
+    other_pairs = my_util.read_csv_file(source_dir + followups_file_name, False, True)
 
     header = agreed_pairs[0]
     conv_id_indx = header.index('conv_id')#onv_id counts seed/reply pairs and is unique for both seed & reply.
