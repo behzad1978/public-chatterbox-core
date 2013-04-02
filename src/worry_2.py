@@ -10,10 +10,11 @@ test set we use two different dicts to strip non-frequent tokens independently f
 
 import my_util
 import os
-import funcs
+import funcs_worry
 import operator
 import re
-import unicodecsv
+import copy
+import svmutil
 
 source_dir = os.path.expanduser('~')
 file_dir = '/Chatterbox_UCL_Advance/Worry/'
@@ -22,6 +23,8 @@ source_file = 'source' + '_' + collection_name
 source_file_noDup = source_file + '_noDup'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
+n_of_features_file_name = 'n_of_features'
+result_file_name = 'results_worry'
 
 ########################################################################################################################
 remove_retweets = True
@@ -29,7 +32,7 @@ use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_labels_and_features_from_file = False
-n_fold_cross_val = 10
+n_fold_cross_val = 2
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
 #positive labels are associated to worried/concerned/stressed... tweets.
 l_pos = +1
@@ -59,11 +62,11 @@ if remove_retweets:
         #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
         tweets = [' '.join(t.split())]
         #remove duplicates by direct comparison of strings
-        tweets = funcs.remove_duplicate_tweets(tweets, False, None)
+        tweets = funcs_worry.remove_duplicate_tweets(tweets, False, None)
         #remove duplicates by direct comparison of the truncated strings
-        tweets = funcs.truncate_and_remove_duplicates(tweets, 4)
+        tweets = funcs_worry.truncate_and_remove_duplicates(tweets, 4)
         if use_qr_to_remove_dups:
-            tweets = funcs.remove_duplicate_tweets(tweets, True, 0.89)
+            tweets = funcs_worry.remove_duplicate_tweets(tweets, True, 0.89)
         my_util.write_csv_file(source_dir + file_dir + source_file_noDup, False, True, [[t] for t in tweets])
 
 labels_pos=[]
@@ -78,16 +81,21 @@ tweet_texts_pos=[]
 tweet_texts_neg=[]
 tweet_texts_oth=[]
 all_texts=[]
+n_of_features_pos=[]
+n_of_features_neg=[]
+n_of_features_oth=[]
 
 if read_labels_and_features_from_file:
     # each row is in the following format: label \t address1:feature_value1 \t address2:feature_value2 \t ...
     rows = my_util.read_csv_file(source_dir + file_dir + labels_features_file_name, True, True)
     texts= my_util.read_csv_file(source_dir + file_dir + tweet_texts_file_name, False, True)
+    n_of_features= my_util.read_csv_file(source_dir + file_dir + n_of_features_file_name, False, True)
     if len(rows) == len(texts):
         for i in range(len(rows)):
             row = rows[i]
             text= texts[i]
             l = int(row[0])
+            n = n_of_features[i]
             # each row is a string in the form of address:feature_value --> separate address from feature: [a,v]
             row =[ a_v.split(':') for a_v in row[1:] ]
             vector = { int(a_v[0]) : float(a_v[1]) for a_v in row }
@@ -95,14 +103,17 @@ if read_labels_and_features_from_file:
                 labels_pos.append(l)
                 feature_vects_pos.append(vector)
                 tweet_texts_pos.append(text)
+                n_of_features_pos.append(n)
             elif l==l_neg:
                 labels_neg.append(l)
                 feature_vects_neg.append(vector)
                 tweet_texts_neg.append(text)
+                n_of_features_neg.append(n)
             elif l==l_oth:
                 labels_oth.append(l)
                 feature_vects_oth.append(vector)
                 tweet_texts_oth.append(text)
+                n_of_features_oth.append(n)
 
     all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
     all_labels = labels_pos + labels_neg #+labels_oth
@@ -129,7 +140,7 @@ else:
     no_signs = no_signs + more_no_signs
 
     #select tweets containing negative signs and put them in the negative set.
-    positives = tweets[:]
+    positives = tweets[:1000]
     negatives = []
     for s in no_signs:
         temp = [t for t in positives if s in t]
@@ -144,18 +155,19 @@ else:
 
     print 'creating feature vectors...'
 
-    # {'feature':feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
-    # when using svm, an address represents a dimension on the space.
-    # So it is important to keep the address consistent for positive and negative sets and also for training and test sets.
+    # {'feature' : feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
+    # when using svm, an address represents a dimension on the input-space. So it is important to keep the address
+    # consistent for positive and negative sets and also for training and test sets.
     features_dict = dict()
-    #{'feature_address (dimension no) : feature} --> used for debugging to visualise features
+    # {feature_address (dimension no) : 'feature'} --> used for debugging to visualise features
     features_dict_reverse = dict()
     #{feature_address (dimension no.) : freq_count} --> freq_count: absolute freq of ngram occurring in token.
     features_count_dict = dict()
-    #whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
+    # whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
 
     if new_normalisation_flag:
         #the very first index is always 1.
+
         max_index = 0
     else:
         max_index = 1
@@ -164,13 +176,13 @@ else:
     #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
     n=3
 
-    feature_vects_pos, tweet_texts_pos, max_index = funcs.get_sparse_feature_vector_worry(positives, features_dict,
+    feature_vects_pos, tweet_texts_pos, max_index, n_of_features_pos = funcs_worry.get_sparse_feature_vector_worry(positives, features_dict,
                                    features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
 
-    feature_vects_neg, tweet_texts_neg, max_index = funcs.get_sparse_feature_vector_worry(negatives, features_dict,
+    feature_vects_neg, tweet_texts_neg, max_index, n_of_features_neg = funcs_worry.get_sparse_feature_vector_worry(negatives, features_dict,
                                    features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
 
-    #feature_vects_oth, tweet_texts_oth, max_index = funcs.get_sparse_feature_vector_worry(others, features_dict,
+    #feature_vects_oth, tweet_texts_oth, max_index, n_of_features_oth = funcs.get_sparse_feature_vector_worry(others, features_dict,
     #                             features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag)
 
     print 'feature vectors created!', 'No of features:', len(features_dict)
@@ -182,9 +194,11 @@ else:
     all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
     all_labels = labels_pos + labels_neg #+labels_oth
     all_texts = tweet_texts_pos + tweet_texts_neg #+tweet_texts_oth
+    all_n_of_features = n_of_features_pos + n_of_features_neg #+ n_of_features_oth
 
-    funcs.write_labels_and_features_to_csv(all_labels, all_feature_vects, source_dir + file_dir + labels_features_file_name)
+    funcs_worry.write_labels_and_features_to_csv(all_labels, all_feature_vects, source_dir + file_dir + labels_features_file_name)
     my_util.write_csv_file(source_dir + file_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
+    my_util.write_csv_file(source_dir + file_dir + n_of_features_file_name, False, True, [[n] for n in all_n_of_features])
 
 # visualising_thresh = 50
 # funcs.write_features_and_freqs_to_csv(feature_vects_pos, features_count_dict_pos, visualising_thresh, source_dir + file_dir + collection_name + "_count_pos")
@@ -241,21 +255,25 @@ def calc_probs():
     my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_pos', False, True, high_prob_features_pos)
     my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_neg', False, True, high_prob_features_neg)
 
-def shuffle_features_and_texts(list1, list2):
-    if len(list1) == len(list2):
-        zipped = zip(list1, list2)
+def shuffle_features_texts_n(list1, list2, list3):
+    if len(list1) == len(list2) == len(list3):
+        zipped = zip(list1, list2, list3)
         random.shuffle(zipped)
         unzipped = zip(*zipped)
         list1 = list(unzipped[0])
         list2 = list(unzipped[1])
+        list3 = list(unzipped[2])
     else:
         raise ValueError('the two list are not equal size!')
     #note that zip returns a new object and does not pass reference
-    return list1, list2
+    return list1, list2, list3
 
-feature_vects_pos, tweet_texts_pos = shuffle_features_and_texts(feature_vects_pos, tweet_texts_pos)
-feature_vects_neg, tweet_texts_neg = shuffle_features_and_texts(feature_vects_neg, tweet_texts_neg)
-feature_vects_oth, tweet_texts_oth = shuffle_features_and_texts(feature_vects_oth, tweet_texts_oth)
+feature_vects_pos, tweet_texts_pos, n_of_features_pos = shuffle_features_texts_n(feature_vects_pos, tweet_texts_pos, n_of_features_pos)
+feature_vects_neg, tweet_texts_neg, n_of_features_neg = shuffle_features_texts_n(feature_vects_neg, tweet_texts_neg, n_of_features_neg)
+#feature_vects_oth, tweet_texts_oth, n_of_features_oth = shuffle_features_texts_n(feature_vects_oth, tweet_texts_oth, n_of_features_oth)
+feature_vects_oth =[]
+tweet_texts_oth=[]
+n_of_features_oth=[]
 
 test_set_size_pos = len(feature_vects_pos) / n_fold_cross_val
 test_set_size_neg = len(feature_vects_neg) / n_fold_cross_val
@@ -303,177 +321,75 @@ for strip_thresh in strip_thresholds:
         print 'test set size others', len(test_set_vects_oth)
 
         train_set_vects_pos = [x for x in feature_vects_pos if x not in test_set_vects_pos]
-        train_set_vects_dis = [x for x in feature_vects_neg if x not in test_set_vects_neg]
+        train_set_vects_neg = [x for x in feature_vects_neg if x not in test_set_vects_neg]
         train_set_vects_oth = [x for x in feature_vects_oth if x not in test_set_vects_oth]
 
         # we need to create two new dicts: one for training and one for test. count all the feature
         #in the test set. this gives the test dict count. subtract this from the original one to get the trainig dict.
-
-
-        features_dict_train = copy.deepcopy(features_dict)
         features_count_dict_train = copy.deepcopy(features_count_dict)
-        features_dict_reverse_train = funcs.get_features_dict_reverse(features_dict_train)
+        all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
+        all_norm_factors = n_of_features_pos + n_of_features_neg + n_of_features_oth
+        for i in range(len(all_test_set_vects)):
+            vect = all_test_set_vects[i]
+            fact = all_norm_factors[i]
+            for a, r in vect.iteritems():
+                c_test = r*fact
+                c_train_and_test = features_count_dict_train[a]
+                diff = c_train_and_test - c_test
+                features_count_dict_train[a] = diff
 
         if strip_thresh > 0:
-            feature_vects_agr_train = funcs.strip_less_than(feature_vects_agr_train, features_count_dict_train,
-                                                            strip_thresh)
-            feature_vects_dis_train = funcs.strip_less_than(feature_vects_dis_train, features_count_dict_train,
-                                                            strip_thresh)
-            feature_vects_others_train = funcs.strip_less_than(feature_vects_others_train, features_count_dict_train,
-                                                               strip_thresh)
-
-        feature_vects_agr_test, s_r_texts_agr_test, \
-        feature_vects_dis_test, s_r_texts_dis_test, \
-        feature_vects_others_test, s_r_texts_others_test, \
-        max_index = \
-            funcs.create_labels_and_features(
-                features_dict, features_count_dict, max_index,
-                test_set_agr, test_set_dis, test_set_others,
-                text_indx,
-                separate_seed_reply_features_flag)
-
-        features_dict_reverse = funcs.get_features_dict_reverse(features_dict)
-
-        features_dict_test, features_count_dict_test = funcs.make_feature_count_dict_test(
-            features_count_dict, features_count_dict_train, features_dict_reverse)
-
-        if strip_thresh > 0:
-            feature_vects_agr_test = funcs.strip_less_than(feature_vects_agr_test, features_count_dict_test,
-                                                           strip_thresh)
-            feature_vects_dis_test = funcs.strip_less_than(feature_vects_dis_test, features_count_dict_test,
-                                                           strip_thresh)
-            feature_vects_others_test = funcs.strip_less_than(feature_vects_others_test, features_count_dict_test,
-                                                              strip_thresh)
-
-        if train_with_liblinear == train_with_svm:
-            raise Exception('The liblinear and libsvm flags are either both True or both False!')
+            train_set_vects_pos = funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
+            train_set_vects_neg = funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
+            train_set_vects_oth = funcs_worry.strip_less_than(train_set_vects_oth, features_count_dict_train, strip_thresh)
+            test_set_vects_pos = funcs_worry.strip_less_than(test_set_vects_pos, features_count_dict_train, strip_thresh)
+            test_set_vects_neg = funcs_worry.strip_less_than(test_set_vects_neg, features_count_dict_train, strip_thresh)
+            test_set_vects_oth = funcs_worry.strip_less_than(test_set_vects_oth, features_count_dict_train, strip_thresh)
 
 
-        elif train_with_svm:
+        x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_oth
+        y_train = [l_pos]*len(train_set_vects_pos) + [l_neg]*len(train_set_vects_neg) + [l_oth]*len(train_set_vects_oth)
 
-            if table_name_flag:
-                tabel_result_name = tabel_result_name + '_libsvm'
-                table_name_flag = False
+        x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
+        test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_oth
+        y_test = [l_pos]*len(test_set_vects_pos) + [l_neg]*len(test_set_vects_neg) + [l_oth]*len(test_set_vects_oth)
 
-            if (l_agr == +1 and l_dis == l_oth == -1) or (l_dis == -1 and l_agr == l_oth == +1):
-                x_train = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
-                s_r_texts_train = s_r_texts_agr_train + s_r_texts_dis_train + s_r_texts_others_train
-                y_train = [l_agr] * len(feature_vects_agr_train) + [l_dis] * len(feature_vects_dis_train) + [
-                    l_oth] * len(
-                    feature_vects_others_train)
+        #-s 0 --> C-SVC (multi-class classification)
+        #-s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
+        #-t 0 --> linear kernel
+        #-w option used to handle unbalanced data is for C-SVC, not nu-SVC!
+        svm_params = '-s 1 -t 0 -n 0.5'# -w0 1'
+        #svm_params = '-s 0 -c 1 -t 0 -w1 1 -w-1 3.55'# -w0 1'
+        prob = svmutil.svm_problem(y_train, x_train)
+        param = svmutil.svm_parameter(svm_params)
+        m = svmutil.svm_train(prob, param)
 
-                x_test = feature_vects_agr_test + feature_vects_dis_test + feature_vects_others_test
-                s_r_texts_test = s_r_texts_agr_test + s_r_texts_dis_test + s_r_texts_others_test
-                y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [l_oth] * len(
-                    feature_vects_others_test)
+        #p_labels --> classification labels predicted by the system.
+        #p_acc --> tuple including accuracy (for classification), MSE, and variance (for regression).
+        #p_val --> classification values predicted by the system.
+        p_label, p_acc, p_val = svmutil.svm_predict(y_test, x_test, m)
+        prediction_result, accuracy, precisions, recalls = funcs_worry.calc_prediction_stats(y_test, test_set_texts, p_label, [l_pos, l_neg, l_oth])
 
-                # s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
-                svm_params = '-s 1 -t 0 -n 0.5'
-                p_label, p_acc, p_val = train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
-                prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                    funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
+        my_util.write_csv_file(source_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False, True, prediction_result)
 
-            if (l_agr == +1 and l_dis == -1 and l_oth == 0):
-
-                if one_against_one == False:
-
-                    #this is a 3-class classification
-                    x_train = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
-                    s_r_texts_train = s_r_texts_agr_train + s_r_texts_dis_train + s_r_texts_others_train
-                    y_train = [l_agr] * len(feature_vects_agr_train) + [l_dis] * len(feature_vects_dis_train) + [
-                        l_oth] * len(
-                        feature_vects_others_train)
-
-                    x_test = feature_vects_agr_test + feature_vects_dis_test + feature_vects_others_test
-                    s_r_texts_test = s_r_texts_agr_test + s_r_texts_dis_test + s_r_texts_others_test
-                    y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [
-                        l_oth] * len(
-                        feature_vects_others_test)
-
-                    #-s 0 --> C-SVC (multi-class classification)
-                    #-t 0 --> linear kernel
-                    #-w option used to handle unbalanced data is for C-SVC, not nu-SVC!
-                    svm_params = ' -s 0 -c 1 -t 0 -w1 1 -w-1 2.7 -w0 1'
-                    p_label, p_acc, p_val = train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
-                    prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
-
-                elif one_against_one == True:
-
-                    #first classify agreed from the rest (i.e. disagreed and others)!
-                    x_train_1 = feature_vects_agr_train + feature_vects_dis_train + feature_vects_others_train
-                    s_r_texts_train_1 = s_r_texts_agr_train + s_r_texts_dis_train + s_r_texts_others_train
-                    l_rest = l_dis
-                    y_train_1 = [l_agr] * len(feature_vects_agr_train) + [l_rest] * len(feature_vects_dis_train) + [
-                        l_rest] * len(feature_vects_others_train)
-
-                    x_test_1 = feature_vects_agr_test + feature_vects_dis_test + feature_vects_others_test
-                    s_r_texts_test_1 = s_r_texts_agr_test + s_r_texts_dis_test + s_r_texts_others_test
-                    y_test_1 = [l_agr] * len(feature_vects_agr_test) + [l_rest] * len(feature_vects_dis_test) + [
-                        l_rest] * len(feature_vects_others_test)
-
-                    #the final y
-                    y_test = [l_agr] * len(feature_vects_agr_test) + [l_dis] * len(feature_vects_dis_test) + [
-                        l_oth] * len(feature_vects_others_test)
-
-                    # s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
-                    svm_params = '-s 1 -t 0 -n 0.5'
-                    p_label_1, p_acc, p_val = train_and_test_with_libsvm(y_train_1, x_train_1, y_test_1, x_test_1,
-                                                                         svm_params)
-
-                    #make a side by side matrix
-                    nRows = len(y_test)
-                    x_sr_y1_p1_y = [[x_test_1[i], s_r_texts_test_1[i], y_test_1[i], p_label_1[i], y_test[i]] for i in
-                                    xrange(nRows)]
-
-                    prediction_result_1, accuracy_1, precision_pos_1, precision_neg_1, precision_zero_1, recall_pos_1, recall_neg_1, recall_zero_1 = \
-                        funcs.calc_prediction_stats(None, None, y_test_1, s_r_texts_test_1, p_label_1, [])
-
-                    #extra step to equalise the two classification set sizes.
-                    min_dis_others = min(len(feature_vects_dis_train), len(feature_vects_others_train))
-                    feature_vects_dis_train = feature_vects_dis_train[0:min_dis_others]
-                    feature_vects_others_train = feature_vects_others_train[0:min_dis_others]
-
-                    #second: classify dispos from others. This is count as a separate classification;
-                    #the training set does not need to have any intersection with the first classification stage.
-                    x_train_2 = feature_vects_dis_train + feature_vects_others_train
-                    y_train_2 = [l_dis] * len(feature_vects_dis_train) + [l_oth] * len(feature_vects_others_train)
-
-                    #the test set is the correct predictions in the stage one that does not contain agreed tweets.
-                    nCol = len(x_sr_y1_p1_y[0])
-                    columns = [[row[i] for row in x_sr_y1_p1_y if (row[2] == row[3] == l_rest)] for i in xrange(nCol)]
-                    x_test_2 = columns[0]
-                    s_r_texts_test_2 = columns[1]
-                    y_test_2 = columns[4]
-
-                    p_label_2, p_acc, p_val = train_and_test_with_libsvm(y_train_2, x_train_2, y_test_2, x_test_2,
-                                                                         svm_params)
-
-                    #make a side by side matrix
-                    x_sr_y2_p2 = [[x_test_2[i], s_r_texts_test_2[i], y_test_2[i], p_label_2[i]] for i in
-                                  xrange(len(y_test_2))]
-
-                    prediction_result_2, accuracy_2, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(None, None, y_test_2, s_r_texts_test_2, p_label_2, [])
-
-                    #copy the predicted labels obtained in stage two to the corresponding labels in stage one.
-                    for u in x_sr_y1_p1_y:
-                        for v in x_sr_y2_p2:
-                            if u[:1] == v[:1]:
-                                u[3] = v[3]
-
-                    s_r_texts_test = [row[1] for row in x_sr_y1_p1_y]
-                    y_test = [row[4] for row in x_sr_y1_p1_y]
-                    p_label = [row[3] for row in x_sr_y1_p1_y]
-
-                    #note that the precision_neg is a bit distorted since a false negative in the first stage could in
-                    #belong to either the negative set or the zero set that will be classified in the second stage.
-                    prediction_result, accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero = \
-                        funcs.calc_prediction_stats(None, None, y_test, s_r_texts_test, p_label, [])
-
-                    my_util.write_csv_file(
-                        source_dir + result_name + str(n + 1) + '_' + 'agr-rest' + '_' + str(accuracy_1) + '%', False,
-                        True, prediction_result_1)
-                    my_util.write_csv_file(
-                        source_dir + result_name + str(n + 1) + '_' + 'dis-oth' + '_' + str(accuracy_2) + '%', False,
-                        True, prediction_result_2)
+#         results_CrossVal.append(
+#             [strip_thresh, n + 1,
+#              len(feature_vects_agr_train), len(feature_vects_dis_train), len(feature_vects_others_train),
+#              len(feature_vects_agr_test), len(feature_vects_dis_test), len(feature_vects_others_test),
+#              accuracy, precision_pos, precision_neg, precision_zero, recall_pos, recall_neg, recall_zero]
+#         )
+#
+# results_CrossVal = sorted(results_CrossVal, key=itemgetter(header.index('accuracy')))
+# results_CrossVal.reverse()
+# means = [''] * header.index(n_fold_CV) + ['mean']#shift the mean to the right, so that it comes under n_fold_CV
+# stdevs = [''] * header.index(n_fold_CV) + ['stdev']
+# for column in range(header.index('tr_size_agr'), len(header)):
+#     data = [row[column] for row in results_CrossVal]
+#     mean, stdev = math_extra.calc_mean_stdev(data)
+#     means = means + [round(mean, 2)]
+#     stdevs = stdevs + [round(stdev, 2)]
+# results_CrossVal = results_CrossVal + [means] + [stdevs]
+#
+# results.append([''] * len(header))#append an empty row
+# results = results + results_CrossVal
+#
