@@ -6,6 +6,7 @@ import re
 import my_util
 import difflib
 import stopwords
+import svmutil
 
 #list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
@@ -132,8 +133,9 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
 
     #i --> the length of the token
     #j --> starting index of the token
-    #sometimes tokens may be empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
+    norm_factor = 0
     n_of_features = 0
+    #sometimes tokens may be empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
     if len(tokens) > 0:
         for i in range(m, n + 1):
             stpwd_flag = False
@@ -163,7 +165,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                         #note: vector, features_dict, features_count_dict are passed by reference
                         #only max_index must be returned, as its value changes inside the method.
                         max_index = add_to_dict(t, len(tokens), vector, features_dict, features_count_dict, max_index)
-                        normal_factor = len(tokens)
+                        norm_factor = len(tokens)
 
         # The following line is performed when the i-loop is finished. This is because, for a given tweet_text, the
         # representing feature-vector must include values of all ngrams extracted from the text.
@@ -172,9 +174,9 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
             # This is more correct than the division by len(tokens), as the no. of ngrams (addressed in a vector) is not
             # necessarily equal to the number of features.
             vector = {a : float(c)/n_of_features for a, c in vector.iteritems()}
-            normal_factor = n_of_features
+            norm_factor = n_of_features
 
-    return vector, max_index, normal_factor
+    return vector, max_index, norm_factor
 
 
 def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
@@ -182,13 +184,16 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
     feature_vectors = []
     tweet_texts = []
     normal_factors = []
-    for tweet in tweet_list:
+    for ind, tweet in enumerate(tweet_list):
         vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
         feature_vectors.append(vector)
         #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
         # during the loop.
         tweet_texts.append(tweet)
         normal_factors.append(normal_factor)
+
+        if (ind % 1000) == 0:
+            print ind
 
     return feature_vectors, tweet_texts, max_index, normal_factors
 
@@ -271,7 +276,7 @@ def remove_duplicates(set_of_seed_reply_tupples):
 
 def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
     prediction_result=[]
-    header = ['seed', 'reply', 'original_label', 'predicted_label', 'prediction_success']
+    header = ['text', 'original_label', 'predicted_label', 'prediction_success']
     prediction_result.append(header)
     true_counts =[0]*len(labels)
     false_counts=[0]*len(labels)
@@ -281,20 +286,20 @@ def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
         text = tweet_texts[i]
         original_label = y_test[i]
         predicted_label = int(p_label[i])
-        prediction = 'wrong'
+        prediction_success = 'wrong'
 
         for j in range(len(labels)):
             if original_label == labels[j]:
                 n_samples[j] +=1
                 if predicted_label == original_label:
-                    prediction = 'correct'
+                    prediction_success = 'correct'
                     true_counts[j] +=1
                     break
 
             if predicted_label == labels[j]:
                 false_counts[j] +=1
 
-        prediction_result.append([text, original_label, predicted_label, prediction])
+        prediction_result.append([text, original_label, predicted_label, p_label, labels])
 
     accuracy = round(float(sum(true_counts)) / len(y_test), 2)
 
@@ -347,9 +352,9 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
 
     return unique_tweets
 
-def write_labels_and_features_to_csv(labels, features, file_name):
+def write_labels_features_in_libsvm_form(labels, features, file_name):
     """
-    this function creates a tab deliminator csv file of the labels and features in the form of:
+    this function creates a tab deliminator csv file of the labels and features in libsvm format:
     label dimention_nr1:feature1 dimention_nr2:feature2 ...
     """
     #labels --> [+1,+1,+1...,+1] or [-1,-1,-1,...,-1]
@@ -364,3 +369,50 @@ def write_labels_and_features_to_csv(labels, features, file_name):
             the_list = [str(l)] + feature_list
             final_list.append(the_list)
     my_util.write_csv_file(file_name, True, True, final_list)
+
+
+def train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params):
+    prob = svmutil.svm_problem(y_train, x_train)
+    param = svmutil.svm_parameter(svm_params)
+    #Show values of parameters
+    print(param)
+    m = svmutil.svm_train(prob, param)
+    #p_labels --> classification labels predicted by the system.
+    #p_acc --> tuple including accuracy (for classification), MSE, and variance (for regression).
+    #p_val --> classification values predicted by the system.
+    p_label, p_acc, p_val = svmutil.svm_predict(y_test, x_test, m)
+    return p_label, p_acc, p_val
+
+
+def calc_probs(features_dict, feature_vects_neg, feature_vects_pos):
+    print 'calculating probabilities...'
+    prob_thresh = 0.69
+    high_prob_features_pos = []
+    high_prob_features_neg = []
+    c = 0
+    for f, a in features_dict.iteritems():
+
+        c += 1
+        if c % 1000 == 0:
+            print c
+
+        neg_tweets_containing_f = [v for v in feature_vects_neg if
+                                   a in v]#Note: a in v is exactly the same as v.has_key(a)
+        pos_tweets_containing_f = [v for v in feature_vects_pos if a in v]
+        p = len(pos_tweets_containing_f)
+        n = len(neg_tweets_containing_f)
+        smoothing_fact = 5
+
+        if n != 0:
+            prob_pos_given_f = float(p) / (p + n + smoothing_fact)
+            if prob_pos_given_f > prob_thresh:
+                high_prob_features_pos.append([f, prob_pos_given_f])
+                #print prob_pos_given_f, f
+
+        if p != 0:
+            prob_neg_given_f = float(n) / (p + n + smoothing_fact)
+            if prob_neg_given_f > prob_thresh:
+                high_prob_features_neg.append([f, prob_neg_given_f])
+                #print prob_neg_given_f, f
+
+    return high_prob_features_pos, high_prob_features_neg
