@@ -279,7 +279,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     #i --> the length of the token
     #j --> starting index of the token
     #sometimes tokens may be empty --> eg: when tweet is just a url --> we exclude the url and it results an empty list.
-    nr_of_features = 0
+    n_of_features = 0
     if len(tokens) > 0:
         for i in range(m, n + 1):
             stpwd_flag = False
@@ -288,7 +288,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                     stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
                 if check_features(tokens[j:j + i], stpwd_flag):
-                    nr_of_features += 1
+                    n_of_features += 1
                     t = " ".join(tokens[j:j + i])
 
                     if new_normalisation_flag:
@@ -309,6 +309,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                         #note: vector, features_dict, features_count_dict are passed by reference
                         #only max_index must be returned, as its value changes inside the method.
                         max_index = add_to_dict(t, len(tokens), vector, features_dict, features_count_dict, max_index)
+                        normal_factor = len(tokens)
 
         # The following line is performed when the i-loop is finished. This is because, for a given tweet_text, the
         # representing feature-vector must include values of all ngrams extracted from the text.
@@ -316,24 +317,26 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
             # Divide all elements of the vector by the number of traversed features.
             # This is more correct than the division by len(tokens), as the no. of ngrams (addressed in a vector) is not
             # necessarily equal to the number of features.
-            vector = {a : float(c)/nr_of_features for a, c in vector.iteritems()}
+            vector = {a : float(c)/n_of_features for a, c in vector.iteritems()}
+            normal_factor = n_of_features
 
-    return vector, max_index
+    return vector, max_index, normal_factor
 
 
 def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
 
     feature_vectors = []
     tweet_texts = []
+    normal_factors = []
     for tweet in tweet_list:
-        vector, max_index = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
         feature_vectors.append(vector)
         #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
         # during the loop.
         tweet_texts.append(tweet)
+        normal_factors.append(normal_factor)
 
-    return feature_vectors, tweet_texts, max_index
-
+    return feature_vectors, tweet_texts, max_index, normal_factors
 
 def write_features_and_freqs_to_csv(features_dict, features_count_dict, thresh, filename):
     feature_freq_list = []
@@ -354,7 +357,7 @@ def get_features_dict_reverse(features_dict):
     return features_dict_reverse
 
 def make_feature_count_dict_test(features_count_dict, features_count_dict_train, features_dict_reverse):
-    #method creating test-set dictionary!
+    # method creating the test-set dictionary!
 
     features_dict_test = dict() #only contains features of the test set
     features_count_dict_test = dict()
@@ -577,7 +580,6 @@ def remove_duplicate_tweets(tweets_list, use_quick_ratio, thresh):
     unique_tweets = [d[0] for d in clustered_tweets]#take one element from each cluster
     return unique_tweets#ß, clustered_tweets
 
-
 def truncate_and_remove_duplicates(tweets, trunc_size):
     #a trunc_size of 2 or 3 sounds reasonable!
     clustered_tweets = []#cluster duplicated/similar tweets together
@@ -595,7 +597,6 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
     unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
 
     return unique_tweets
-
 
 def write_labels_and_features_to_csv(labels, features, file_name):
     """

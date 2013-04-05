@@ -33,16 +33,30 @@ remove_retweets = True
 use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
-read_data_from_file = False
-n_fold_cross_val = 2
+read_data_from_file = True
+n_fold_cross_val = 10
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
 random.seed(7)
-#positive labels are associated to worried/concerned/stressed... tweets.
-l_pos = +1
-#negative labels are associated to NOT worried/concerned/stressed... tweets.
-l_neg = -1
-#other labels are associated to any other types of tweets.
-l_oth = 0
+# positive labels are associated to worried/concerned/stressed... tweets.
+# negative labels are associated to NOT worried/concerned/stressed... tweets.
+# other labels are associated to any other types of tweets.
+labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
+#m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
+m = 1
+#length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
+n = 3
+###################################################### libsvm settings #################################################
+# The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
+svm_type = 'C_SVC' #'nu_SVC'
+# Set the kernel. linear --> 0; polynomial --> 1; radial basis --> 2; sigmoid --> 3; precomputed kernel --> 4
+kernel_type = 0
+# Set the cost parameter for the C_CSV
+cost = 10
+# Set the nu parameter for the nu_SVC
+# Note: if nu is not small enough, the following error message is shown: "specified nu is infeasible"
+nu = 0.05
+# Assign different costs to balance unbalanced (different sized) training sets.
+balance_sets = True
 ########################################################################################################################
 
 labels_pos = []
@@ -71,31 +85,44 @@ features_dict_reverse = dict()
 features_count_dict = dict()
 # whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
 
+# if feature_vectors have been previously created, then we just read them from formerly created saved file.
 if read_data_from_file:
+    # read labels and features.
     # each row is in the following format: label \t address1:feature_value1 \t address2:feature_value2 \t ...
-    rows = my_util.read_csv_file(source_dir + file_dir + labels_features_file_name, True, True)
-    texts = my_util.read_csv_file(source_dir + file_dir + tweet_texts_file_name, False, True)
+    labels_features = my_util.read_csv_file(source_dir + file_dir + labels_features_file_name, True, True)
+    # read tweet_texts corresponding to the feature_vectors
+    tweet_texts = my_util.read_csv_file(source_dir + file_dir + tweet_texts_file_name, False, True)
+    # when creating feature_vectors, we count tokens resulted from the tweet_text. We then divide counts by a common
+    # factor (normalisation factor) which is either the Nr. of tokens or the Nr. of features.
+    # Normalisation factors are needed to create a separate feature_count_dict for the training set the , which is used
+    # for stripping less frequent features to reduce the dimensionality of the feature space.
     norm_factors = my_util.read_csv_file(source_dir + file_dir + norm_factor_file_name, False, True)
-    if len(rows) == len(texts):
-        for i in range(len(rows)):
-            row = rows[i]
-            text = texts[i][0]
-            l = int(row[0])
+    if len(labels_features) == len(tweet_texts):
+        # iterate through each row i
+        for i in range(len(labels_features)):
+            l_f = labels_features[i]
+            text = tweet_texts[i][0]
+            # the first element of the row is the label
+            l = int(l_f[0])
+            # the rest of the elements are the feature_vector
+            f = l_f[1:]
+            # read the normalisation factor corresponding to each feature_vector
             n = int(norm_factors[i][0])
-            # each row is a string in the form of address:feature_value --> separate address from feature: [a,v]
-            row = [a_v.split(':') for a_v in row[1:]]
-            vector = {int(a_v[0]): float(a_v[1]) for a_v in row}
-            if l == l_pos:
+            # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
+            f = [a_v.split(':') for a_v in f]
+            # create a dictionary (i.e. the feature_vector) in the form of { address : value }
+            vector = { int(a_v[0]): float(a_v[1]) for a_v in f }
+            if l == labels['pos']:
                 labels_pos.append(l)
                 feature_vects_pos.append(vector)
                 tweet_texts_pos.append(text)
                 norm_factors_pos.append(n)
-            elif l == l_neg:
+            elif l == labels['neg']:
                 labels_neg.append(l)
                 feature_vects_neg.append(vector)
                 tweet_texts_neg.append(text)
                 norm_factors_neg.append(n)
-            elif l == l_oth:
+            elif l == labels['oth']:
                 labels_oth.append(l)
                 feature_vects_oth.append(vector)
                 tweet_texts_oth.append(text)
@@ -119,7 +146,9 @@ else:
             tweets_noDup = my_util.read_csv_file(source_dir + file_dir + source_file_noDup, False, True)
             tweets = [t[0] for t in tweets_noDup]
             tweets = [t.lower() for t in tweets]
-            tweets = [' '.join(t.split()) for t in tweets]#this part removes extra spaces that may exist between words.
+            # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
+            # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
+            tweets = [' '.join(t.split()) for t in tweets]
         except IOError:
             #read the source file --> [[text1], [text2], [test3], ...]
             tweets = my_util.read_csv_file(source_dir + file_dir + source_file, False, True)
@@ -150,18 +179,16 @@ else:
     no_signs = nots + [x + ' ' + y for x in nots for y in verbs]
 
     adverbs = ['as', 'so', 'so much', 'to', 'too', 'too much', 'very much', 'that much', 'this much', 'completely',
-               'totally',
-               'entirely', 'extremely', 'nobody', 'anybody', 'anyone', 'ever', 'normally', 'really', "even"]
+               'totally', 'entirely', 'extremely', 'nobody', 'anybody', 'anyone', 'ever', 'normally', 'really', "even"]
 
-    #more_no_signs = ['worried at all', 'stop worrying about']
-    more_no_signs = ['concerned at all', 'stop concerning about']
+    more_no_signs = [collection_name + ' at all'] #, 'stop worrying about']
 
     no_signs = no_signs + [x + ' ' + y for x in no_signs for y in adverbs]
     no_signs = [x + ' ' + collection_name for x in no_signs]
     no_signs = no_signs + more_no_signs
 
     #select tweets containing negative signs and put them in the negative set.
-    positives = tweets[:100]
+    positives = tweets[:]
     negatives = []
     for s in no_signs:
         temp = [t for t in positives if s in t]
@@ -176,16 +203,11 @@ else:
 
     print 'creating feature vectors...'
 
+    #the very first index is always 1.
     if new_normalisation_flag:
-        #the very first index is always 1.
-
         max_index = 0
     else:
         max_index = 1
-        #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
-    m = 1
-    #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-    n = 3
 
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
         positives, features_dict,
@@ -200,8 +222,8 @@ else:
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
-    labels_pos = [l_pos] * len(feature_vects_pos)
-    labels_neg = [l_neg] * len(feature_vects_neg)
+    labels_pos = [labels['pos']] * len(feature_vects_pos)
+    labels_neg = [labels['neg']] * len(feature_vects_neg)
     #labels_pos = [l_oth] * len(feature_vects_oth)
 
     all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
@@ -261,8 +283,8 @@ def shuffle_features_texts_n(list1, list2, list3):
 
 
 feature_vects_pos, tweet_texts_pos, norm_factors_pos = shuffle_features_texts_n(feature_vects_pos, tweet_texts_pos, norm_factors_pos)
-feature_vects_neg, tweet_texts_neg, norm_factors_neg = shuffle_features_texts_n(feature_vects_neg, tweet_texts_neg,norm_factors_neg)
-#feature_vects_oth, tweet_texts_oth, n_of_features_oth = shuffle_features_texts_n(feature_vects_oth, tweet_texts_oth, n_of_features_oth)
+feature_vects_neg, tweet_texts_neg, norm_factors_neg = shuffle_features_texts_n(feature_vects_neg, tweet_texts_neg, norm_factors_neg)
+#feature_vects_oth, tweet_texts_oth, n_of_features_oth = shuffle_features_texts_n(feature_vects_oth, tweet_texts_oth, norm_factors_oth)
 feature_vects_oth = []
 tweet_texts_oth = []
 norm_factors_oth = []
@@ -287,8 +309,8 @@ for strip_thresh in strip_thresholds:
         strt_neg = n * test_set_size_neg
         strt_oth = n * test_set_size_oth
 
-        print str(n_fold_cross_val) + '-fold cross validation in progress...'
-        print 'iteration', n, '\n'
+        print str(n_fold_cross_val) + '-fold cross validation in progress...\n'
+        print 'iteration', n+1, '\n'
 
         if n < n_fold_cross_val - 1:
             end_pos = (n + 1) * test_set_size_pos
@@ -313,12 +335,14 @@ for strip_thresh in strip_thresholds:
         print 'test set size negative:', len(test_set_vects_neg)
         print 'test set size others', len(test_set_vects_oth)
 
+        # note that the size of the train-set is not necessarily equal to the size of the whole data set minus the size
+        # of the test set. This is because still some duplicated tweets (re-tweets) may exist in the data set!
         train_set_vects_pos = [x for x in feature_vects_pos if x not in test_set_vects_pos]
         train_set_vects_neg = [x for x in feature_vects_neg if x not in test_set_vects_neg]
         train_set_vects_oth = [x for x in feature_vects_oth if x not in test_set_vects_oth]
 
         # we need to create two new dicts: one for training and one for test. count all the feature
-        #in the test set. this gives the test dict count. subtract this from the original one to get the trainig dict.
+        #in the test set. this gives the test dict count. subtract this from the original one to get the training dict.
         features_count_dict_train = copy.deepcopy(features_count_dict)
         all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
         all_norm_factors = norm_factors_pos + norm_factors_neg + norm_factors_oth
@@ -346,24 +370,19 @@ for strip_thresh in strip_thresholds:
                 funcs_worry.strip_less_than(test_set_vects_oth, features_count_dict_train, strip_thresh)
 
         x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_oth
-        y_train = [l_pos] * len(train_set_vects_pos) + [l_neg] * len(train_set_vects_neg) + [l_oth] * len(
-            train_set_vects_oth)
+        y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg) \
+                  #+ [labels['oth']] * len(train_set_vects_oth)
 
         x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
         test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_oth
-        y_test = [l_pos] * len(test_set_vects_pos) + [l_neg] * len(test_set_vects_neg) + [l_oth] * len(
-            test_set_vects_oth)
+        y_test = [labels['pos']] * len(test_set_vects_pos) + [labels['neg']] * len(test_set_vects_neg) \
+                 #+ [labels['oth']] * len(test_set_vects_oth)
 
-        #-s 0 --> C-SVC (multi-class classification)
-        #-s 1 --> nu-SVC (multi-class classification) --> default: -n = 0.5
-        #-t 0 --> linear kernel
-        #-w option used to handle unbalanced data is for C-SVC, not nu-SVC!
-        #svm_params = '-s 1 -t 0 -n 0.5'
-        w_ratio = round(float(len(test_set_vects_pos))/len(test_set_vects_neg), 2)
-        svm_params = '-s 0 -c 10 -t 0' + ' -w' + str(l_pos) + ' 1' + ' -w' + str(l_neg) + ' ' + str(w_ratio) #+ ' -w'+str(l_oth)
+        training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg)}#,'oth':len(train_set_vects_oth)}
+        svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
         p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
         prediction_result, accuracy, precisions, recalls = \
-            funcs_worry.calc_prediction_stats(y_test, test_set_texts, p_label, [l_pos, l_neg, l_oth])
+            funcs_worry.calc_prediction_stats(y_test, test_set_texts, p_label, labels.values())
 
         my_util.write_csv_file(source_dir + file_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
                                True, prediction_result)

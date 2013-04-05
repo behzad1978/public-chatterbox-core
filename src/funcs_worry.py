@@ -275,6 +275,7 @@ def remove_duplicates(set_of_seed_reply_tupples):
     return noDuplicate
 
 def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
+    #labels is a list containing labels, like: [0,+1,-1]
     prediction_result=[]
     header = ['text', 'original_label', 'predicted_label', 'prediction_success']
     prediction_result.append(header)
@@ -299,7 +300,7 @@ def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
             if predicted_label == labels[j]:
                 false_counts[j] +=1
 
-        prediction_result.append([text, original_label, predicted_label, p_label, labels])
+        prediction_result.append([text, original_label, predicted_label, prediction_success])
 
     accuracy = round(float(sum(true_counts)) / len(y_test), 2)
 
@@ -416,3 +417,32 @@ def calc_probs(features_dict, feature_vects_neg, feature_vects_pos):
                 #print prob_neg_given_f, f
 
     return high_prob_features_pos, high_prob_features_neg
+
+def get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes):
+    #labels is a dict in the form of { 'pos':+1, 'neg':-1, 'oth':0}
+    if svm_type == 'C_SVC':
+        param = '-s 0'
+        param = param + ' -c ' + str(cost)
+    elif svm_type == 'nu_SVC':
+        param = '-s 1'
+        param = param + ' -n ' + str(nu)
+
+    param = param + ' -t ' + str(kernel_type)
+
+    #for 3-class classification, we balance the set sos that w1*set1 == w2*set2 == w3*set3
+    #we can first define w1=1, then w2=len(set1)/len(set2), w3=len(set1)/len(set3) is derived
+    if balance_sets:
+        first_iter = True
+        for k, v in labels.iteritems():
+            if first_iter:
+                k0 = k
+                w = 1
+                weights = ' w' + str(v) + ' ' + str(w)
+                first_iter = False
+            else:
+                w = round(float(training_sizes[k0])/(training_sizes[k]), 2)
+                weights = weights + ' w' + str(v) + ' ' + str(w)
+
+    param = param + weights
+
+    return param
