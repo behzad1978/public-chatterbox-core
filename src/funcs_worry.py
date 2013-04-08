@@ -312,6 +312,46 @@ def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
 
     return prediction_result, accuracy, precisions, recalls
 
+
+def calc_prediction_stats_2(y_test, tweet_texts, p_label, labels):
+    #labels is a dict containing labels: {'pos':1, 'neg':-1, 'oth':0}
+    prediction_result = []
+    header = ['text', 'original_label', 'predicted_label', 'prediction_success']
+    prediction_result.append(header)
+    true_counts = dict(zip(labels.keys(), [0] * len(labels)))
+    false_counts = dict(zip(labels.keys(), [0] * len(labels)))
+    n_samples = dict(zip(labels.keys(), [0] * len(labels)))
+
+    for i in range(len(tweet_texts)):
+        text = tweet_texts[i]
+        original_label = y_test[i]
+        predicted_label = int(p_label[i])
+        prediction_success = 'wrong'
+
+        for l, j in labels.iteritems():
+            if original_label == j:
+                n_samples[l] += 1
+                if predicted_label == original_label:
+                    prediction_success = 'correct'
+                    true_counts[l] += 1
+                    break
+
+            if predicted_label == j:
+                false_counts[l] += 1
+
+        prediction_result.append([text, original_label, predicted_label, prediction_success])
+
+    accuracy = round(float(sum(true_counts.values())) / len(y_test), 2)
+
+    # do-something if x, else do-something else.
+    precisions = { l : round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2) if
+                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in labels.keys()}
+
+    recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if n_samples[l] <> 0 else 0 for l in labels.keys() }
+
+    return prediction_result, accuracy, precisions, recalls
+
+
 def remove_duplicate_tweets(tweets_list, use_quick_ratio, thresh):
     clustered_tweets = []#cluster duplicated/similar tweets together
     while len(tweets_list) > 0:
@@ -437,12 +477,101 @@ def get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_s
             if first_iter:
                 k0 = k
                 w = 1
-                weights = ' w' + str(v) + ' ' + str(w)
+                weights = ' -w' + str(v) + ' ' + str(w)
                 first_iter = False
             else:
                 w = round(float(training_sizes[k0])/(training_sizes[k]), 2)
-                weights = weights + ' w' + str(v) + ' ' + str(w)
+                weights = weights + ' -w' + str(v) + ' ' + str(w)
 
     param = param + weights
+    print param
 
     return param
+
+
+def find_pos_neg_tweets(keyword, tweets):
+
+    nots = ["never", "don't", "dont", "no", "not", "ain", "ainn", "aint", "ain't", "aren't", "arent", "isn't", "isnt",
+            "wasn't", "wasnt", "weren't", "werent", "haven't", "havent", "hasn't", "hasnt", "won't", "wont", "can not",
+            "cannot", "couldn't", "couldnt", "shouldn't", "shouldnt", "wouldn't", "wouldnt"]
+
+    verbs = ["be", "been", "get"]
+
+    no_signs = nots + [x + ' ' + y for x in nots for y in verbs]
+
+    adverbs = ['as', 'so', 'so much', 'to', 'too', 'too much', 'very much', 'that much', 'this much', 'completely',
+               'totally', 'entirely', 'extremely', 'nobody', 'anybody', 'anyone', 'ever', 'normally', 'really', "even"]
+
+    more_no_signs = [keyword + ' at all'] #, 'stop worrying about']
+
+    no_signs = no_signs + [x + ' ' + y for x in no_signs for y in adverbs]
+    no_signs = [x + ' ' + keyword for x in no_signs]
+    no_signs = no_signs + more_no_signs
+
+    #select tweets containing negative signs and put them in the negative set.
+    positives = tweets[:]
+    negatives = []
+    for s in no_signs:
+        temp = [t for t in positives if s in t]
+        negatives = negatives + temp
+        positives = [t for t in positives if t not in temp]
+
+    print keyword + ':', len(positives)
+    print 'not_' + keyword + ':', len(negatives)
+
+    return positives, negatives
+
+def remove_retweets(tweets, use_qr_to_remove_dups):
+    #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
+    tweets = [t.lower() for t in tweets]
+    #put a space between any non punct char and a punct char
+    tweets = [re.sub(r"(?u)(\w)(\W)", r"\1 \2", t) for t in tweets]
+    #put a space between any punct char and a non punct char
+    tweets = [re.sub(r"(?u)(\W)([\w@#])", r"\1 \2", t) for t in tweets]
+    #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
+    tweets = [' '.join(t.split())]
+    #remove duplicates by direct comparison of strings
+    tweets = remove_duplicate_tweets(tweets, False, None)
+    #remove duplicates by direct comparison of the truncated strings
+    tweets = truncate_and_remove_duplicates(tweets, 4)
+    if use_qr_to_remove_dups:
+        tweets = remove_duplicate_tweets(tweets, True, 0.89)
+
+    return tweets
+
+
+def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, class_labels):
+
+    # create an empty list corresponding to each class_labels
+    labels = {}; feature_vects = {}; texts = {}; norms = {}
+    for l_k, l_v in class_labels.iteritems():
+        labels[l_k] = []
+        feature_vects[l_k] = []
+        texts[l_k] = []
+        norms[l_k] = []
+
+    if len(labels_features) == len(tweet_texts):
+        # iterate through each row i
+        for i in range(len(labels_features)):
+            l_f = labels_features[i]
+            text = tweet_texts[i][0]
+            # the first element of the row is the label
+            l = int(l_f[0])
+            # the rest of the elements are the feature_vector
+            f = l_f[1:]
+            # read the normalisation factor corresponding to each feature_vector
+            n = int(norm_factors[i][0])
+            # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
+            f = [a_v.split(':') for a_v in f]
+            # create a dictionary (i.e. the feature_vector) in the form of { address : value }
+            vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
+
+            # iterate through all given labels ('pos', 'neg', 'oth', ...) to put the feature-vectors read from file into
+            # the right category. labels is a dict in the form of {'pos' : 1, 'neg' : -1, 'oth' : 0, ...}
+            for l_k, l_v in class_labels.iteritems():
+                if l == l_v:
+                    labels[l_k].append(l)
+                    feature_vects[l_k].append(vector)
+                    texts[l_k].append(text)
+                    norms[l_k].append(n)
+    return labels, feature_vects, texts, norms
