@@ -13,34 +13,35 @@ import copy
 from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
-source_dir = '/Chatterbox_UCL_Advance/Worry/'
+source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
 collection_name = 'worried'
-collection_name_oth = 'concerned'
+collection_name_oth = 'relaxed'
 source_file = 'source' + '_' + collection_name
 source_file_oth = 'source' + '_' + collection_name_oth
 source_file_noDup = source_file + '_noDup'
 source_file_noDup_oth = source_file_oth + '_noDup'
+saving_dir = '/Chatterbox_UCL_Advance/Worry/worried_vs_relaxed/'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
 norm_factor_file_name = 'norm_factor'
 result_file_name = 'Results/cross_val'
 features_dict_file_name = 'features_dict'
 features_count_dict_file_name = 'features_count_dict'
-table_file_name = 'Results/cross_val_table'
+table_file_name = 'Results/table'
 
 ########################################################################################################################
 remove_retweets = True
 use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
-read_data_from_file = True
+read_data_from_file = False
 n_fold_cross_val = 10
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
 # other labels are associated to any other types of tweets.
-labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
+labels = { 'pos' : +1, 'neg' : -1, 'oth' : 0 }
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
 m = 1
 #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
@@ -61,19 +62,15 @@ balance_sets = True
 
 labels_pos = []
 labels_neg = []
-labels_oth = []
 all_labels = []
 feature_vects_pos = []
 feature_vects_neg = []
-feature_vects_oth = []
 all_feature_vects = []
 tweet_texts_pos = []
 tweet_texts_neg = []
-tweet_texts_oth = []
 all_texts = []
 norm_factors_pos = []
 norm_factors_neg = []
-norm_factors_oth = []
 
 # {'feature' : feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
 # when using svm, an address represents a dimension on the input-space. So it is important to keep the address
@@ -122,11 +119,11 @@ if read_data_from_file:
                 feature_vects_neg.append(vector)
                 tweet_texts_neg.append(text)
                 norm_factors_neg.append(n)
-            elif l == labels['oth']:
-                labels_oth.append(l)
-                feature_vects_oth.append(vector)
-                tweet_texts_oth.append(text)
-                norm_factors_oth.append(n)
+            # elif l == labels['oth']:
+            #     labels_oth.append(l)
+            #     feature_vects_oth.append(vector)
+            #     tweet_texts_oth.append(text)
+            #     norm_factors_oth.append(n)
 
     all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
     all_labels = labels_pos + labels_neg #+labels_oth
@@ -171,11 +168,14 @@ else:
             tweets_oth = funcs_worry.remove_retweets(tweets_oth, use_qr_to_remove_dups)
             my_util.write_csv_file(home_dir + source_dir + source_file_noDup_oth, False, True, [[t] for t in tweets_oth])
 
-    positives, negatives = funcs_worry.find_pos_neg_texts(collection_name, tweets)
-    positives_oth, negatives_oth = funcs_worry.find_pos_neg_texts(collection_name_oth, tweets)
+    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name, tweets)
+    positives_oth, negatives_oth = funcs_worry.find_pos_neg_tweets(collection_name_oth, tweets_oth)
 
     my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in negatives])
     my_util.write_csv_file(home_dir + source_dir + collection_name, False, True, [[t] for t in positives])
+
+    my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_oth, False, True, [[t] for t in negatives_oth])
+    my_util.write_csv_file(home_dir + source_dir + collection_name_oth, False, True, [[t] for t in positives_oth])
 
     print 'creating feature vectors...'
 
@@ -194,44 +194,45 @@ else:
     feature_vects_pos_oth, tweet_texts_pos_oth, max_index, norm_factors_pos_oth = funcs_worry.get_sparse_feature_vector_worry(
         positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag)
 
-    feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
-        negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+    # feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
+    #     negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
-    labels_pos = [labels['pos']] * len(feature_vects_pos)
-    labels_neg = [labels['neg']] * len(feature_vects_neg)
-    #labels_pos = [l_oth] * len(feature_vects_oth)
+    # labels_pos = [labels['pos']] * len(feature_vects_pos)
+    # labels_neg = [labels['neg']] * len(feature_vects_neg)
+    # # labels_pos = [labels['oth']] * len(feature_vects_pos)
+    #
+    # all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
+    # all_labels = labels_pos + labels_neg #+labels_oth
+    # all_texts = tweet_texts_pos + tweet_texts_neg #+tweet_texts_oth
+    # all_norm_factors = norm_factors_pos + norm_factors_neg #+ norm_factors_oth
 
-    all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
-    all_labels = labels_pos + labels_neg #+labels_oth
-    all_texts = tweet_texts_pos + tweet_texts_neg #+tweet_texts_oth
-    all_norm_factors = norm_factors_pos + norm_factors_neg #+ norm_factors_oth
-
-    funcs_worry.write_labels_features_in_libsvm_form(all_labels, all_feature_vects, home_dir + source_dir + labels_features_file_name)
-    my_util.write_csv_file(home_dir + source_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
-    my_util.write_csv_file(home_dir + source_dir + norm_factor_file_name, False, True, [[n] for n in all_norm_factors])
-    #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
-    feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
-    my_util.write_csv_file(home_dir + source_dir + features_dict_file_name, True, True, feature_list)
-    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
-    feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-    my_util.write_csv_file(home_dir + source_dir + features_count_dict_file_name, False, True, feature_count_list)
+    # The following lines save features and labels in files to be read when we want to read them from file and not creating again.
+    # funcs_worry.write_labels_features_in_libsvm_form(all_labels, all_feature_vects, home_dir + source_dir + labels_features_file_name)
+    # my_util.write_csv_file(home_dir + source_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
+    # my_util.write_csv_file(home_dir + source_dir + norm_factor_file_name, False, True, [[n] for n in all_norm_factors])
+    # #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
+    # feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
+    # my_util.write_csv_file(home_dir + source_dir + features_dict_file_name, True, True, feature_list)
+    # #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    # feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+    # my_util.write_csv_file(home_dir + source_dir + features_count_dict_file_name, False, True, feature_count_list)
 
     # visualising_thresh = 50
 # funcs.write_features_and_freqs_to_csv(feature_vects_pos, features_count_dict_pos, visualising_thresh, source_dir + file_dir + collection_name + "_count_pos")
 # funcs.write_features_and_freqs_to_csv(feature_vects_neg, features_count_dict_neg, visualising_thresh, source_dir + file_dir + collection_name + "_count_neg")
 
-def find_double_keywords(the_list):
-    worried_worried = []
-    for t in the_list:
-        t = t.split()
-        keyword = collection_name
-        count = len([x for x in t if x == keyword])
-        if count >= 2:
-            t = ' '.join(t)
-            worried_worried.append([t])
-    return worried_worried
+# def find_double_keywords(the_list):
+#     worried_worried = []
+#     for t in the_list:
+#         t = t.split()
+#         keyword = collection_name
+#         count = len([x for x in t if x == keyword])
+#         if count >= 2:
+#             t = ' '.join(t)
+#             worried_worried.append([t])
+#     return worried_worried
 
 
 # keyword_keyword_pos = find_double_keywords(tweet_texts_pos)
@@ -261,14 +262,11 @@ def shuffle_features_texts_n(list1, list2, list3):
 
 feature_vects_pos, tweet_texts_pos, norm_factors_pos = shuffle_features_texts_n(feature_vects_pos, tweet_texts_pos, norm_factors_pos)
 feature_vects_neg, tweet_texts_neg, norm_factors_neg = shuffle_features_texts_n(feature_vects_neg, tweet_texts_neg, norm_factors_neg)
-#feature_vects_oth, tweet_texts_oth, n_of_features_oth = shuffle_features_texts_n(feature_vects_oth, tweet_texts_oth, norm_factors_oth)
-feature_vects_oth = []
-tweet_texts_oth = []
-norm_factors_oth = []
+feature_vects_pos_oth, tweet_texts_pos_oth, n_of_features_pos_oth = shuffle_features_texts_n(feature_vects_pos_oth, tweet_texts_pos_oth, norm_factors_pos_oth)
 
 test_set_size_pos = len(feature_vects_pos) / n_fold_cross_val
 test_set_size_neg = len(feature_vects_neg) / n_fold_cross_val
-test_set_size_oth = len(feature_vects_oth) / n_fold_cross_val
+test_set_size_pos_oth = len(feature_vects_pos_oth) / n_fold_cross_val
 results = []
 n_fold_CV = '%d_fold_CV' % n_fold_cross_val
 header = ['strip_thresh',
@@ -284,7 +282,7 @@ for strip_thresh in strip_thresholds:
 
         strt_pos = n * test_set_size_pos
         strt_neg = n * test_set_size_neg
-        strt_oth = n * test_set_size_oth
+        strt_oth = n * test_set_size_pos_oth
 
         print str(n_fold_cross_val) + '-fold cross validation in progress...\n'
         print 'iteration', n+1, '\n'
@@ -292,37 +290,37 @@ for strip_thresh in strip_thresholds:
         if n < n_fold_cross_val - 1:
             end_pos = (n + 1) * test_set_size_pos
             end_neg = (n + 1) * test_set_size_neg
-            end_oth = (n + 1) * test_set_size_oth
+            end_oth = (n + 1) * test_set_size_pos_oth
 
         else:
             #this is the last part
             end_pos = len(feature_vects_pos)
             end_neg = len(feature_vects_neg)
-            end_oth = len(feature_vects_oth)
+            end_oth = len(feature_vects_pos_oth)
 
         test_set_vects_pos = feature_vects_pos[strt_pos: end_pos]
         test_set_vects_neg = feature_vects_neg[strt_neg: end_neg]
-        test_set_vects_oth = feature_vects_oth[strt_oth: end_oth]
+        test_set_vects_pos_oth = feature_vects_pos_oth[strt_oth: end_oth]
 
         test_set_texts_pos = tweet_texts_pos[strt_pos: end_pos]
         test_set_texts_neg = tweet_texts_neg[strt_neg: end_neg]
-        test_set_texts_oth = tweet_texts_oth[strt_oth: end_oth]
+        test_set_texts_pos_oth = tweet_texts_pos_oth[strt_oth: end_oth]
 
         print 'test set size positive:', len(test_set_vects_pos)
         print 'test set size negative:', len(test_set_vects_neg)
-        print 'test set size others', len(test_set_vects_oth)
+        print 'test set size others', len(test_set_vects_pos_oth)
 
         # note that the size of the train-set is not necessarily equal to the size of the whole data set minus the size
         # of the test set. This is because still some duplicated tweets (re-tweets) may exist in the data set!
         train_set_vects_pos = [x for x in feature_vects_pos if x not in test_set_vects_pos]
         train_set_vects_neg = [x for x in feature_vects_neg if x not in test_set_vects_neg]
-        train_set_vects_oth = [x for x in feature_vects_oth if x not in test_set_vects_oth]
+        train_set_vects_pos_oth = [x for x in feature_vects_pos_oth if x not in test_set_vects_pos_oth]
 
         # we need to create two new dicts: one for training and one for test. count all the feature
         #in the test set. this gives the test dict count. subtract this from the original one to get the training dict.
         features_count_dict_train = copy.deepcopy(features_count_dict)
-        all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
-        all_norm_factors = norm_factors_pos + norm_factors_neg + norm_factors_oth
+        all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
+        all_norm_factors = norm_factors_pos + norm_factors_neg + norm_factors_pos_oth
         for i in range(len(all_test_set_vects)):
             vect = all_test_set_vects[i]
             fact = all_norm_factors[i]
@@ -337,38 +335,36 @@ for strip_thresh in strip_thresholds:
                 funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
             train_set_vects_neg = \
                 funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
-            train_set_vects_oth = \
-                funcs_worry.strip_less_than(train_set_vects_oth, features_count_dict_train, strip_thresh)
+            train_set_vects_pos_oth = \
+                funcs_worry.strip_less_than(train_set_vects_pos_oth, features_count_dict_train, strip_thresh)
             test_set_vects_pos = \
                 funcs_worry.strip_less_than(test_set_vects_pos, features_count_dict_train, strip_thresh)
             test_set_vects_neg = \
                 funcs_worry.strip_less_than(test_set_vects_neg, features_count_dict_train, strip_thresh)
-            test_set_vects_oth = \
-                funcs_worry.strip_less_than(test_set_vects_oth, features_count_dict_train, strip_thresh)
+            test_set_vects_pos_oth = \
+                funcs_worry.strip_less_than(test_set_vects_pos_oth, features_count_dict_train, strip_thresh)
 
-        x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_oth
-        y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg) \
-                  #+ [labels['oth']] * len(train_set_vects_oth)
+        x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_pos_oth
+        y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg) + [labels['oth']] * len(train_set_vects_pos_oth)
 
-        x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_oth
-        test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_oth
-        y_test = [labels['pos']] * len(test_set_vects_pos) + [labels['neg']] * len(test_set_vects_neg) \
-                 #+ [labels['oth']] * len(test_set_vects_oth)
+        x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
+        test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_pos_oth
+        y_test = [labels['pos']] * len(test_set_vects_pos) + [labels['neg']] * len(test_set_vects_neg) + [labels['oth']] * len(test_set_vects_pos_oth)
 
-        training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg)}#,'oth':len(train_set_vects_oth)}
+        training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg), 'oth':len(train_set_vects_pos_oth)}
         svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
         p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
         prediction_result, accuracy, precisions, recalls = \
-            funcs_worry.calc_prediction_stats(y_test, test_set_texts, p_label, labels.values())
+            funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
 
-        my_util.write_csv_file(home_dir + source_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
+        my_util.write_csv_file(home_dir + saving_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
                                True, prediction_result)
 
         results_CrossVal.append(
             [strip_thresh, n + 1,
-             len(train_set_vects_pos), len(train_set_vects_neg), len(train_set_vects_oth),
-             len(test_set_vects_pos), len(test_set_vects_neg), len(test_set_vects_oth),
-             accuracy, precisions[0], precisions[1], precisions[2], recalls[0], recalls[1], recalls[2]]
+             len(train_set_vects_pos), len(train_set_vects_neg), len(train_set_vects_pos_oth),
+             len(test_set_vects_pos), len(test_set_vects_neg), len(test_set_vects_pos_oth),
+             accuracy, precisions['pos'], precisions['neg'], precisions['oth'], recalls['pos'], recalls['neg'], recalls['oth']]
         )
 
     results_CrossVal = sorted(results_CrossVal, key=itemgetter(header.index('accuracy')))
@@ -386,5 +382,5 @@ for strip_thresh in strip_thresholds:
     results.append([''] * len(header))#append an empty row
     results = results + results_CrossVal
 
-my_util.write_csv_file(home_dir + source_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
+my_util.write_csv_file(home_dir + saving_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
                        False, True, results)

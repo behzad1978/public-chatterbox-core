@@ -313,22 +313,29 @@ def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
     return prediction_result, accuracy, precisions, recalls
 
 
-def calc_prediction_stats_2(y_test, tweet_texts, p_label, labels):
-    #labels is a dict containing labels: {'pos':1, 'neg':-1, 'oth':0}
+def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
+    # y_test is the list of desired labels which are supposed to be predicted.
+    # tweet_texts is the list of tweet_texts in the test set, corresponding (1-1) to labels in the y_test.
+    # p_label is a list of predicted labels
+    # class_labels is a dict containing classification label types: {'pos':1, 'neg':-1, 'oth':0}
     prediction_result = []
     header = ['text', 'original_label', 'predicted_label', 'prediction_success']
     prediction_result.append(header)
-    true_counts = dict(zip(labels.keys(), [0] * len(labels)))
-    false_counts = dict(zip(labels.keys(), [0] * len(labels)))
-    n_samples = dict(zip(labels.keys(), [0] * len(labels)))
+    # true_counts records the number of correct predictions for each label-type in the whole test-set.
+    true_counts = dict(zip(class_labels.keys(), [0] * len(class_labels)))
+    # false_counts records the number of wrong predictions for each label-type in the whole test-set.
+    false_counts = dict(zip(class_labels.keys(), [0] * len(class_labels)))
+    # n_samples gives the size of different classes in the test set (how many of each label-type exists in the y_test).
+    n_samples = dict(zip(class_labels.keys(), [0] * len(class_labels)))
 
+    # iterate through every element in the test set.
     for i in range(len(tweet_texts)):
         text = tweet_texts[i]
         original_label = y_test[i]
         predicted_label = int(p_label[i])
         prediction_success = 'wrong'
 
-        for l, j in labels.iteritems():
+        for l, j in class_labels.iteritems():
             if original_label == j:
                 n_samples[l] += 1
                 if predicted_label == original_label:
@@ -339,15 +346,18 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, labels):
             if predicted_label == j:
                 false_counts[l] += 1
 
+        # when saved in csv format, this is a file showing the predicted state of each element in the test set.
         prediction_result.append([text, original_label, predicted_label, prediction_success])
 
     accuracy = round(float(sum(true_counts.values())) / len(y_test), 2)
 
+    # for every class in the test set calculate the respective precision and recall values.
     # do-something if x, else do-something else.
     precisions = { l : round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2) if
-                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in labels.keys()}
+                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in class_labels.keys()}
 
-    recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if n_samples[l] <> 0 else 0 for l in labels.keys() }
+    recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if
+               n_samples[l] <> 0 else 0 for l in class_labels.keys() }
 
     return prediction_result, accuracy, precisions, recalls
 
@@ -381,7 +391,7 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
 
     #split tweet texts
     truncs = [t.split() for t in tweets]
-    #truncate the beginning and the end of tweets
+    #truncate the beginning and the end of tweets. If very short, then don't truncate.
     truncs = [t[trunc_size : len(t) - trunc_size] for t in truncs if len(t) > 2*trunc_size]
     #stick back the split truncated tweets
     truncs = [' '.join(t) for t in truncs]
@@ -392,6 +402,24 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
     unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
 
     return unique_tweets
+
+
+def remove_retweets(tweets, use_qr_to_remove_dups):
+    #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
+    tweets = [t.lower() for t in tweets]
+    #put a space between any non punct char and a punct char
+    tweets = [re.sub(r"(?u)(\w)(\W)", r"\1 \2", t) for t in tweets]
+    #put a space between any punct char and a non punct char
+    tweets = [re.sub(r"(?u)(\W)([\w@#])", r"\1 \2", t) for t in tweets]
+    #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
+    tweets = [' '.join(t.split()) for t in tweets]
+    #remove duplicates by direct comparison of the truncated strings
+    tweets = truncate_and_remove_duplicates(tweets, 4)
+    if use_qr_to_remove_dups:
+        #remove duplicates by direct comparison of strings
+        tweets = remove_duplicate_tweets(tweets, True, 0.89)
+
+    return tweets
 
 def write_labels_features_in_libsvm_form(labels, features, file_name):
     """
@@ -521,25 +549,6 @@ def find_pos_neg_tweets(keyword, tweets):
 
     return positives, negatives
 
-def remove_retweets(tweets, use_qr_to_remove_dups):
-    #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
-    tweets = [t.lower() for t in tweets]
-    #put a space between any non punct char and a punct char
-    tweets = [re.sub(r"(?u)(\w)(\W)", r"\1 \2", t) for t in tweets]
-    #put a space between any punct char and a non punct char
-    tweets = [re.sub(r"(?u)(\W)([\w@#])", r"\1 \2", t) for t in tweets]
-    #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
-    tweets = [' '.join(t.split())]
-    #remove duplicates by direct comparison of strings
-    tweets = remove_duplicate_tweets(tweets, False, None)
-    #remove duplicates by direct comparison of the truncated strings
-    tweets = truncate_and_remove_duplicates(tweets, 4)
-    if use_qr_to_remove_dups:
-        tweets = remove_duplicate_tweets(tweets, True, 0.89)
-
-    return tweets
-
-
 def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, class_labels):
 
     # create an empty list corresponding to each class_labels
@@ -575,3 +584,13 @@ def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, c
                     texts[l_k].append(text)
                     norms[l_k].append(n)
     return labels, feature_vects, texts, norms
+
+def get_dimension_size(list_of_vectors):
+    # method giving the feature space dimension for training/test set.
+    dimensions = []
+    # the following loop gathers all dimension numbers in a list:
+    for v in list_of_vectors:
+        dimensions = dimensions + v.keys()
+    # now only keep unique dimensions as vectors share some similar dimensions
+    dimensions = set(dimensions)
+    return len(dimensions)

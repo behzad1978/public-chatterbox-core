@@ -17,7 +17,7 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
-save_dir = '/Chatterbox_UCL_Advance/Worry/train_on_worried_test_on_concerned/'
+save_dir = '/Chatterbox_UCL_Advance/Worry/worried_vs_concerned/'
 collection_name = 'worried'
 collection_name_oth = 'concerned'
 source_file = 'source' + '_' + collection_name
@@ -39,7 +39,7 @@ remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
 n_fold_cross_val = 10
-strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
+strip_thresholds = [0, 1, 100, 250, 500, 750, 1000]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -51,7 +51,7 @@ m = 1
 n = 3
 ###################################################### libsvm settings #################################################
 # The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
-svm_type = 'C_SVC' #'nu_SVC'
+svm_type = 'C_SVC'#'nu_SVC'#
 # Set the kernel. linear --> 0; polynomial --> 1; radial basis --> 2; sigmoid --> 3; precomputed kernel --> 4
 kernel_type = 0
 # Set the cost parameter for the C_CSV
@@ -162,15 +162,12 @@ if remove_retweets:
 # my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_pos', False, True, high_prob_features_pos)
 # my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_neg', False, True, high_prob_features_neg)
 
-final_results = []
+results = []
 header = ['strip_thresh', 'tr_size_pos', 'tr_size_neg', 'ts_size_pos', 'ts_size_neg',
+          'tr_dim_size', 'ts_dim_size',
           'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg']
 
-final_results.append(header)
-
 for strip_thresh in strip_thresholds:
-
-    results = []
 
     train_set_vects_pos = feature_vects_pos
     train_set_vects_neg = feature_vects_neg
@@ -184,12 +181,14 @@ for strip_thresh in strip_thresholds:
     print 'test set size positive:', len(test_set_vects_pos)
     print 'test set size negative:', len(test_set_vects_neg)
 
-    # we need to create two new dicts: one for training and one for test. Count all the feature in the test set.
+    # We need to create a new dicts just for training set. Count all the feature in the test set.
     # This gives the test dict count. Subtract this from the original one to get the training dict.
     features_count_dict_train = copy.deepcopy(features_count_dict)
     all_test_set_vects = test_set_vects_pos + test_set_vects_neg
     norm_factors_test = norm_factors_pos_oth + norm_factors_neg_oth
     for i in range(len(all_test_set_vects)):
+        if (i % 1000) == 0:
+            print 'creating training dictionary', i
         vect = all_test_set_vects[i]
         fact = norm_factors_test[i]
         for a, r in vect.iteritems():
@@ -208,6 +207,10 @@ for strip_thresh in strip_thresholds:
         test_set_vects_neg = \
             funcs_worry.strip_less_than(test_set_vects_neg, features_count_dict_train, strip_thresh)
 
+    # train sets and test sets are list of dictionaries (called vectors).
+    train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
+    test_set_dim = funcs_worry.get_dimension_size(test_set_vects_pos + test_set_vects_neg)
+
     x_train = train_set_vects_pos + train_set_vects_neg
     y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg)
 
@@ -222,29 +225,31 @@ for strip_thresh in strip_thresholds:
     prediction_result, accuracy, precisions, recalls = \
         funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
 
-    my_util.write_csv_file(home_dir + save_dir + result_file_name + '_' + str(accuracy) + '%', False,
-                           True, prediction_result)
+    my_util.write_csv_file(home_dir+save_dir+result_file_name + '_ST'+str(strip_thresh)+'_'+str(accuracy)+'%',
+                           False,True, prediction_result)
 
     results.append(
         [strip_thresh,
          len(train_set_vects_pos), len(train_set_vects_neg), len(test_set_vects_pos), len(test_set_vects_neg),
-         accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']]
+         train_set_dim, test_set_dim, accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']]
     )
 
-    results = sorted(results, key=itemgetter(header.index('accuracy')))
-    results.reverse()
+# results = sorted(results, key=itemgetter(header.index('accuracy')))
+# results.reverse()
 
-    means = ['mean']
-    stdevs = ['stdev']
-    for column in range(header.index('tr_size_pos'), len(header)):
-        data = [row[column] for row in results]
-        mean, stdev = math_extra.calc_mean_stdev(data)
-        means = means + [round(mean, 2)]
-        stdevs = stdevs + [round(stdev, 2)]
-    results = results + [means] + [stdevs]
+means = ['mean']
+stdevs = ['stdev']
+for column in range(header.index('tr_size_pos'), len(header)):
+    data = [row[column] for row in results]
+    mean, stdev = math_extra.calc_mean_stdev(data)
+    means = means + [round(mean, 2)]
+    stdevs = stdevs + [round(stdev, 2)]
 
-    final_results.append([''] * len(header))#append an empty row
-    final_results = final_results + results
+#append an empty row
+results.append([''] * len(header))
+# add two rows: means and stdev
+results = results + [means] + [stdevs]
+# append the header at the beginning
+results = [header] + results
 
-my_util.write_csv_file(home_dir + save_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
-                       False, True, final_results)
+my_util.write_csv_file(home_dir + save_dir + table_file_name, False, True, results)
