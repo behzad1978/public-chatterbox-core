@@ -9,7 +9,7 @@ import math_extra
 import my_util
 import os
 import funcs_worry
-import copy
+import svmutil
 from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
@@ -264,123 +264,138 @@ feature_vects_pos, tweet_texts_pos, norm_factors_pos = shuffle_features_texts_n(
 feature_vects_neg, tweet_texts_neg, norm_factors_neg = shuffle_features_texts_n(feature_vects_neg, tweet_texts_neg, norm_factors_neg)
 feature_vects_pos_oth, tweet_texts_pos_oth, n_of_features_pos_oth = shuffle_features_texts_n(feature_vects_pos_oth, tweet_texts_pos_oth, norm_factors_pos_oth)
 
-test_set_size_pos = len(feature_vects_pos) / n_fold_cross_val
-test_set_size_neg = len(feature_vects_neg) / n_fold_cross_val
-test_set_size_pos_oth = len(feature_vects_pos_oth) / n_fold_cross_val
-results = []
-n_fold_CV = '%d_fold_CV' % n_fold_cross_val
-header = ['strip_thresh',
-          n_fold_CV, 'tr_size_pos', 'tr_size_neg', 'tr_size_oth', 'ts_size_pos', 'ts_size_neg', 'ts_size_oth',
-          'accuracy', 'precision_pos', 'precision_neg', 'precision_zero', 'recall_pos', 'recall_neg', 'recall_zero']
+########################################################################################################################
+########################################################################################################################
+training_sizes = {'pos': len(feature_vects_pos), 'neg': len(feature_vects_neg), 'oth': len(feature_vects_pos_oth)}
+svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
+#add CV parameter
+svm_params = svm_params + ' -v ' + str(n_fold_cross_val)
+x = feature_vects_pos + feature_vects_neg + feature_vects_pos_oth
+y = [labels['pos']] * len(feature_vects_pos) + [labels['neg']] * len(feature_vects_neg) + [labels['oth']] * len(feature_vects_pos_oth)
 
-results.append(header)
+prob = svmutil.svm_problem(y, x)
+param = svmutil.svm_parameter(svm_params)
+m = svmutil.svm_train(prob, param)
+########################################################################################################################
+########################################################################################################################
 
-for strip_thresh in strip_thresholds:
-
-    results_CrossVal = []
-    for n in range(0, n_fold_cross_val):
-
-        strt_pos = n * test_set_size_pos
-        strt_neg = n * test_set_size_neg
-        strt_oth = n * test_set_size_pos_oth
-
-        print str(n_fold_cross_val) + '-fold cross validation in progress...\n'
-        print 'iteration', n+1, '\n'
-
-        if n < n_fold_cross_val - 1:
-            end_pos = (n + 1) * test_set_size_pos
-            end_neg = (n + 1) * test_set_size_neg
-            end_oth = (n + 1) * test_set_size_pos_oth
-
-        else:
-            #this is the last part
-            end_pos = len(feature_vects_pos)
-            end_neg = len(feature_vects_neg)
-            end_oth = len(feature_vects_pos_oth)
-
-        test_set_vects_pos = feature_vects_pos[strt_pos: end_pos]
-        test_set_vects_neg = feature_vects_neg[strt_neg: end_neg]
-        test_set_vects_pos_oth = feature_vects_pos_oth[strt_oth: end_oth]
-
-        test_set_texts_pos = tweet_texts_pos[strt_pos: end_pos]
-        test_set_texts_neg = tweet_texts_neg[strt_neg: end_neg]
-        test_set_texts_pos_oth = tweet_texts_pos_oth[strt_oth: end_oth]
-
-        print 'test set size positive:', len(test_set_vects_pos)
-        print 'test set size negative:', len(test_set_vects_neg)
-        print 'test set size others', len(test_set_vects_pos_oth)
-
-        # note that the size of the train-set is not necessarily equal to the size of the whole data set minus the size
-        # of the test set. This is because still some duplicated tweets (re-tweets) may exist in the data set!
-        train_set_vects_pos = [x for x in feature_vects_pos if x not in test_set_vects_pos]
-        train_set_vects_neg = [x for x in feature_vects_neg if x not in test_set_vects_neg]
-        train_set_vects_pos_oth = [x for x in feature_vects_pos_oth if x not in test_set_vects_pos_oth]
-
-        # we need to create two new dicts: one for training and one for test. count all the feature
-        #in the test set. this gives the test dict count. subtract this from the original one to get the training dict.
-        features_count_dict_train = copy.deepcopy(features_count_dict)
-        all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
-        all_norm_factors = norm_factors_pos + norm_factors_neg + norm_factors_pos_oth
-        for i in range(len(all_test_set_vects)):
-            vect = all_test_set_vects[i]
-            fact = all_norm_factors[i]
-            for a, r in vect.iteritems():
-                c_test = r * fact
-                c_train_and_test = features_count_dict_train[a]
-                diff = int(c_train_and_test - c_test)
-                features_count_dict_train[a] = diff
-
-        if strip_thresh > 0:
-            train_set_vects_pos = \
-                funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
-            train_set_vects_neg = \
-                funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
-            train_set_vects_pos_oth = \
-                funcs_worry.strip_less_than(train_set_vects_pos_oth, features_count_dict_train, strip_thresh)
-            test_set_vects_pos = \
-                funcs_worry.strip_less_than(test_set_vects_pos, features_count_dict_train, strip_thresh)
-            test_set_vects_neg = \
-                funcs_worry.strip_less_than(test_set_vects_neg, features_count_dict_train, strip_thresh)
-            test_set_vects_pos_oth = \
-                funcs_worry.strip_less_than(test_set_vects_pos_oth, features_count_dict_train, strip_thresh)
-
-        x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_pos_oth
-        y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg) + [labels['oth']] * len(train_set_vects_pos_oth)
-
-        x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
-        test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_pos_oth
-        y_test = [labels['pos']] * len(test_set_vects_pos) + [labels['neg']] * len(test_set_vects_neg) + [labels['oth']] * len(test_set_vects_pos_oth)
-
-        training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg), 'oth':len(train_set_vects_pos_oth)}
-        svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
-        p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
-        prediction_result, accuracy, precisions, recalls = \
-            funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
-
-        my_util.write_csv_file(home_dir + saving_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
-                               True, prediction_result)
-
-        results_CrossVal.append(
-            [strip_thresh, n + 1,
-             len(train_set_vects_pos), len(train_set_vects_neg), len(train_set_vects_pos_oth),
-             len(test_set_vects_pos), len(test_set_vects_neg), len(test_set_vects_pos_oth),
-             accuracy, precisions['pos'], precisions['neg'], precisions['oth'], recalls['pos'], recalls['neg'], recalls['oth']]
-        )
-
-    results_CrossVal = sorted(results_CrossVal, key=itemgetter(header.index('accuracy')))
-    results_CrossVal.reverse()
-    means = [''] * header.index(n_fold_CV) + ['mean']#shift the mean to the right, so that it comes under n_fold_CV
-
-    stdevs = [''] * header.index(n_fold_CV) + ['stdev']
-    for column in range(header.index('tr_size_pos'), len(header)):
-        data = [row[column] for row in results_CrossVal]
-        mean, stdev = math_extra.calc_mean_stdev(data)
-        means = means + [round(mean, 2)]
-        stdevs = stdevs + [round(stdev, 2)]
-    results_CrossVal = results_CrossVal + [means] + [stdevs]
-
-    results.append([''] * len(header))#append an empty row
-    results = results + results_CrossVal
-
-my_util.write_csv_file(home_dir + saving_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
-                       False, True, results)
+# test_set_size_pos = len(feature_vects_pos) / n_fold_cross_val
+# test_set_size_neg = len(feature_vects_neg) / n_fold_cross_val
+# test_set_size_pos_oth = len(feature_vects_pos_oth) / n_fold_cross_val
+# results = []
+# n_fold_CV = '%d_fold_CV' % n_fold_cross_val
+# header = ['strip_thresh',
+#           n_fold_CV, 'tr_size_pos', 'tr_size_neg', 'tr_size_oth', 'ts_size_pos', 'ts_size_neg', 'ts_size_oth',
+#           'accuracy', 'precision_pos', 'precision_neg', 'precision_zero', 'recall_pos', 'recall_neg', 'recall_zero']
+#
+# results.append(header)
+#
+# for strip_thresh in strip_thresholds:
+#
+#     results_CrossVal = []
+#     for n in range(0, n_fold_cross_val):
+#
+#         strt_pos = n * test_set_size_pos
+#         strt_neg = n * test_set_size_neg
+#         strt_oth = n * test_set_size_pos_oth
+#
+#         print str(n_fold_cross_val) + '-fold cross validation in progress...\n'
+#         print 'iteration', n+1, '\n'
+#
+#         if n < n_fold_cross_val - 1:
+#             end_pos = (n + 1) * test_set_size_pos
+#             end_neg = (n + 1) * test_set_size_neg
+#             end_oth = (n + 1) * test_set_size_pos_oth
+#
+#         else:
+#             #this is the last part
+#             end_pos = len(feature_vects_pos)
+#             end_neg = len(feature_vects_neg)
+#             end_oth = len(feature_vects_pos_oth)
+#
+#         test_set_vects_pos = feature_vects_pos[strt_pos: end_pos]
+#         test_set_vects_neg = feature_vects_neg[strt_neg: end_neg]
+#         test_set_vects_pos_oth = feature_vects_pos_oth[strt_oth: end_oth]
+#
+#         test_set_texts_pos = tweet_texts_pos[strt_pos: end_pos]
+#         test_set_texts_neg = tweet_texts_neg[strt_neg: end_neg]
+#         test_set_texts_pos_oth = tweet_texts_pos_oth[strt_oth: end_oth]
+#
+#         print 'test set size positive:', len(test_set_vects_pos)
+#         print 'test set size negative:', len(test_set_vects_neg)
+#         print 'test set size others', len(test_set_vects_pos_oth)
+#
+#         # note that the size of the train-set is not necessarily equal to the size of the whole data set minus the size
+#         # of the test set. This is because still some duplicated tweets (re-tweets) may exist in the data set!
+#         train_set_vects_pos = [x for x in feature_vects_pos if x not in test_set_vects_pos]
+#         train_set_vects_neg = [x for x in feature_vects_neg if x not in test_set_vects_neg]
+#         train_set_vects_pos_oth = [x for x in feature_vects_pos_oth if x not in test_set_vects_pos_oth]
+#
+#         # we need to create two new dicts: one for training and one for test. count all the feature
+#         #in the test set. this gives the test dict count. subtract this from the original one to get the training dict.
+#         features_count_dict_train = copy.deepcopy(features_count_dict)
+#         all_test_set_vects = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
+#         all_norm_factors = norm_factors_pos + norm_factors_neg + norm_factors_pos_oth
+#         for i in range(len(all_test_set_vects)):
+#             vect = all_test_set_vects[i]
+#             fact = all_norm_factors[i]
+#             for a, r in vect.iteritems():
+#                 c_test = r * fact
+#                 c_train_and_test = features_count_dict_train[a]
+#                 diff = int(c_train_and_test - c_test)
+#                 features_count_dict_train[a] = diff
+#
+#         if strip_thresh > 0:
+#             train_set_vects_pos = \
+#                 funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
+#             train_set_vects_neg = \
+#                 funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
+#             train_set_vects_pos_oth = \
+#                 funcs_worry.strip_less_than(train_set_vects_pos_oth, features_count_dict_train, strip_thresh)
+#             test_set_vects_pos = \
+#                 funcs_worry.strip_less_than(test_set_vects_pos, features_count_dict_train, strip_thresh)
+#             test_set_vects_neg = \
+#                 funcs_worry.strip_less_than(test_set_vects_neg, features_count_dict_train, strip_thresh)
+#             test_set_vects_pos_oth = \
+#                 funcs_worry.strip_less_than(test_set_vects_pos_oth, features_count_dict_train, strip_thresh)
+#
+#         x_train = train_set_vects_pos + train_set_vects_neg + train_set_vects_pos_oth
+#         y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg) + [labels['oth']] * len(train_set_vects_pos_oth)
+#
+#         x_test = test_set_vects_pos + test_set_vects_neg + test_set_vects_pos_oth
+#         test_set_texts = test_set_texts_pos + test_set_texts_neg + test_set_texts_pos_oth
+#         y_test = [labels['pos']] * len(test_set_vects_pos) + [labels['neg']] * len(test_set_vects_neg) + [labels['oth']] * len(test_set_vects_pos_oth)
+#
+#         training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg), 'oth':len(train_set_vects_pos_oth)}
+#         svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
+#         p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
+#         prediction_result, accuracy, precisions, recalls = \
+#             funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
+#
+#         my_util.write_csv_file(home_dir + saving_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
+#                                True, prediction_result)
+#
+#         results_CrossVal.append(
+#             [strip_thresh, n + 1,
+#              len(train_set_vects_pos), len(train_set_vects_neg), len(train_set_vects_pos_oth),
+#              len(test_set_vects_pos), len(test_set_vects_neg), len(test_set_vects_pos_oth),
+#              accuracy, precisions['pos'], precisions['neg'], precisions['oth'], recalls['pos'], recalls['neg'], recalls['oth']]
+#         )
+#
+#     results_CrossVal = sorted(results_CrossVal, key=itemgetter(header.index('accuracy')))
+#     results_CrossVal.reverse()
+#     means = [''] * header.index(n_fold_CV) + ['mean']#shift the mean to the right, so that it comes under n_fold_CV
+#
+#     stdevs = [''] * header.index(n_fold_CV) + ['stdev']
+#     for column in range(header.index('tr_size_pos'), len(header)):
+#         data = [row[column] for row in results_CrossVal]
+#         mean, stdev = math_extra.calc_mean_stdev(data)
+#         means = means + [round(mean, 2)]
+#         stdevs = stdevs + [round(stdev, 2)]
+#     results_CrossVal = results_CrossVal + [means] + [stdevs]
+#
+#     results.append([''] * len(header))#append an empty row
+#     results = results + results_CrossVal
+#
+# my_util.write_csv_file(home_dir + saving_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
+#                        False, True, results)

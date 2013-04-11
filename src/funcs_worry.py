@@ -497,7 +497,7 @@ def get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_s
 
     param = param + ' -t ' + str(kernel_type)
 
-    #for 3-class classification, we balance the set sos that w1*set1 == w2*set2 == w3*set3
+    #for 3-class classification, we balance the set so that w1*set1 == w2*set2 == w3*set3
     #we can first define w1=1, then w2=len(set1)/len(set2), w3=len(set1)/len(set3) is derived
     if balance_sets:
         first_iter = True
