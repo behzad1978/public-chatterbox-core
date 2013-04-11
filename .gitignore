@@ -16,3 +16,4 @@ local_settings.py
 *popvox/django_dev_cache*
 .idea
 
+src/temp/*
