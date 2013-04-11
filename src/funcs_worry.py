@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 __author__ = 'behzadbehzadan'
 
 from operator import itemgetter
@@ -7,6 +8,7 @@ import my_util
 import difflib
 import stopwords
 import svmutil
+from collections import defaultdict
 
 #list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
@@ -37,8 +39,8 @@ def exclude_url(split_text):
             no_url_tweet_text.append(t)
     return no_url_tweet_text
 
-def check_feature(f, stopword_flag):
-    global train_labs, shorteners
+def check_feature(f, stopword_flag, train_labs):
+    global shorteners
     #print train_labs
     if f == "" or f == None:
         return None
@@ -57,11 +59,11 @@ def check_feature(f, stopword_flag):
         return False
     if f == "rt":
         return False
-    # if f in train_labs:
-    #     if random.randint(0, 10) == 5:
-    #         return True
-    #     else:
-    #         return False
+    if f in train_labs:
+        # if random.randint(0, 10) == 5:
+        #     return True
+        # else:
+        return False
     if "www" in f:
         return False
     for short in shorteners:
@@ -71,10 +73,10 @@ def check_feature(f, stopword_flag):
         return True
 
 
-def check_features(f_list, stopword_flag):
+def check_features(f_list, stopword_flag, train_labs):
     #print f_list
     for f in f_list:
-        if not (check_feature(f, stopword_flag)):
+        if not (check_feature(f, stopword_flag, train_labs)):
             return False
     return True
 
@@ -97,7 +99,7 @@ def add_to_dict(t, the_length, vector, features_dict, features_count_dict, max_i
 
     return max_index
 
-def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
+def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs):
     """
     this provides a term-frequency vector
     """
@@ -143,7 +145,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                 if i == 1:
                     stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
-                if check_features(tokens[j:j + i], stpwd_flag):
+                if check_features(tokens[j:j + i], stpwd_flag, train_labs):
                     n_of_features += 1
                     t = " ".join(tokens[j:j + i])
 
@@ -179,13 +181,13 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     return vector, max_index, norm_factor
 
 
-def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag):
+def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs):
 
     feature_vectors = []
     tweet_texts = []
     normal_factors = []
     for ind, tweet in enumerate(tweet_list):
-        vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
         feature_vectors.append(vector)
         #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
         # during the loop.
@@ -321,12 +323,13 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
     prediction_result = []
     header = ['text', 'original_label', 'predicted_label', 'prediction_success']
     prediction_result.append(header)
+    # defaultdict is part of the collections module that can have default values (like int) and does not give key_error
     # true_counts records the number of correct predictions for each label-type in the whole test-set.
-    true_counts = dict(zip(class_labels.keys(), [0] * len(class_labels)))
+    true_counts = defaultdict(int)
     # false_counts records the number of wrong predictions for each label-type in the whole test-set.
-    false_counts = dict(zip(class_labels.keys(), [0] * len(class_labels)))
+    false_counts = defaultdict(int)
     # n_samples gives the size of different classes in the test set (how many of each label-type exists in the y_test).
-    n_samples = dict(zip(class_labels.keys(), [0] * len(class_labels)))
+    n_samples = defaultdict(int)
 
     # iterate through every element in the test set.
     for i in range(len(tweet_texts)):
@@ -516,30 +519,36 @@ def get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_s
 
     return param
 
+def get_negative_phrases(keyword):
 
-def find_pos_neg_tweets(keyword, tweets):
-
-    nots = ["never", "don't", "dont", "no", "not", "ain", "ainn", "aint", "ain't", "aren't", "arent", "isn't", "isnt",
+    negs = ["never", "don't", "dont", "no", "not", "ain", "ainn", "aint", "ain't", "aren't", "arent", "isn't", "isnt",
             "wasn't", "wasnt", "weren't", "werent", "haven't", "havent", "hasn't", "hasnt", "won't", "wont", "can not",
             "cannot", "couldn't", "couldnt", "shouldn't", "shouldnt", "wouldn't", "wouldnt"]
 
     verbs = ["be", "been", "get"]
 
-    no_signs = nots + [x + ' ' + y for x in nots for y in verbs]
+    neg_phrases = negs + [x + ' ' + y for x in negs for y in verbs]
 
     adverbs = ['as', 'so', 'so much', 'to', 'too', 'too much', 'very much', 'that much', 'this much', 'completely',
-               'totally', 'entirely', 'extremely', 'nobody', 'anybody', 'anyone', 'ever', 'normally', 'really', "even"]
+           'totally', 'entirely', 'extremely', 'nobody', 'anybody', 'anyone', 'ever', 'normally', 'really', "even"]
 
-    more_no_signs = [keyword + ' at all'] #, 'stop worrying about']
+    more_neg_phrases = [keyword + ' at all'] #, 'stop worrying about']
 
-    no_signs = no_signs + [x + ' ' + y for x in no_signs for y in adverbs]
-    no_signs = [x + ' ' + keyword for x in no_signs]
-    no_signs = no_signs + more_no_signs
+    neg_phrases = neg_phrases + [x + ' ' + y for x in neg_phrases for y in adverbs]
+    neg_phrases = [x + ' ' + keyword for x in neg_phrases]
+    neg_phrases = neg_phrases + more_neg_phrases
+
+    return neg_phrases
+
+
+def find_pos_neg_tweets(keyword, tweets):
+
+    neg_phrases = get_negative_phrases(keyword)
 
     #select tweets containing negative signs and put them in the negative set.
     positives = tweets[:]
     negatives = []
-    for s in no_signs:
+    for s in neg_phrases:
         temp = [t for t in positives if s in t]
         negatives = negatives + temp
         positives = [t for t in positives if t not in temp]

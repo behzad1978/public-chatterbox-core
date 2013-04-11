@@ -1,7 +1,7 @@
 __author__ = 'behzadbehzadan'
 
 """
-This version is a binary class classification.
+This version is a binary class classification, classifying "worried" tweets from "(not) worried" ones.
 """
 
 import random
@@ -146,11 +146,16 @@ else:
     else:
         max_index = 1
 
+    # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
+    # These phrases must not exist - and, hence, excluded - from the feature space.
+    neg_train_labs = funcs_worry.get_negative_phrases(collection_name)
+    train_labs = neg_train_labs + [collection_name]
+
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
