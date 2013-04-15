@@ -1,10 +1,9 @@
 __author__ = 'behzadbehzadan'
 
 """
-In this version, a binary classification applies on 'worried' (positive) and 'not worried' (negative)training sets.
-The test set, however, contains 'concerned' (positive) and
-'not concerned' (negative) tweets. This is to examine how a system trained on 'worried' collection can be applied on
-similar collections like 'concerned'.
+In this version, a binary classification applies on 'worried' (positive) and 'not worried' (negative) training sets.
+The test set, however, contains 'concerned' (positive) and 'not concerned' (negative) tweets. This is to examine how a
+system trained on 'worried' collection can be applied on similar collections like 'concerned'.
 """
 
 import random
@@ -31,6 +30,12 @@ result_file_name = 'Results/result'
 features_dict_file_name = 'features_dict'
 features_count_dict_file_name = 'features_count_dict'
 table_file_name = 'Results/table'
+# the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
+# These phrases must not exist - and, hence, excluded - from the feature space.
+neg_train_labs = funcs_worry.get_negative_phrases(collection_name)
+train_labs = neg_train_labs + [collection_name] + ['worry'] + ['worries'] + ['worrie'] + ['worr']
+neg_train_labs_oth = funcs_worry.get_negative_phrases(collection_name_oth)
+train_labs_oth = neg_train_labs_oth + [collection_name_oth] + ['concern']
 
 ########################################################################################################################
 remove_retweets = True
@@ -39,7 +44,7 @@ remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
 n_fold_cross_val = 10
-strip_thresholds = [0, 1, 100, 250, 500, 750, 1000]
+strip_thresholds = [0]#, 1, 100, 250, 500, 750, 1000]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -61,6 +66,7 @@ cost = 10
 nu = 0.05
 # Assign different costs to balance unbalanced (different sized) training sets.
 balance_sets = True
+use_even_test_sets = True
 ########################################################################################################################
 
 labels_pos = []
@@ -140,16 +146,16 @@ if remove_retweets:
         max_index = 1
 
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     feature_vects_pos_oth, tweet_texts_pos_oth, max_index, norm_factors_pos_oth = funcs_worry.get_sparse_feature_vector_worry(
-        positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag)
+        positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, train_labs_oth)
 
     feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
-        negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+        negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs_oth)
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
@@ -157,6 +163,13 @@ if remove_retweets:
     labels_neg = [labels['neg']] * len(feature_vects_neg)
     labels_pos_oth = [labels['pos']] * len(feature_vects_pos_oth)
     labels_neg_oth = [labels['neg']] * len(feature_vects_neg_oth)
+
+    #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
+    feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
+    my_util.write_csv_file(home_dir + save_dir + features_dict_file_name, True, True, feature_list)
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+    my_util.write_csv_file(home_dir + save_dir + features_count_dict_file_name, False, True, feature_count_list)
 
 # high_prob_features_pos, high_prob_features_neg = funcs_worry.calc_probs(features_dict, feature_vects_neg, feature_vects_pos)
 # my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_pos', False, True, high_prob_features_pos)
@@ -196,6 +209,28 @@ for strip_thresh in strip_thresholds:
             c_train_and_test = features_count_dict_train[a]
             diff = int(c_train_and_test - c_test)
             features_count_dict_train[a] = diff
+
+    ################################################################################################################
+    if use_even_test_sets:
+        if len(test_set_vects_pos) > len(test_set_vects_neg):
+            # zip feature_vectors and tweet_texts for sampling
+            zipped = zip(test_set_vects_pos, test_set_texts_pos)
+            # randomly select elements
+            sampled_zipped = random.sample(zipped, len(test_set_vects_neg))
+            # unzip sampled elements
+            test_set_vects_pos, test_set_texts_pos = list(zip(*sampled_zipped))
+            test_set_vects_pos = list(test_set_vects_pos)
+            test_set_texts_pos = list(test_set_texts_pos)
+        elif len(test_set_vects_neg) > len(test_set_vects_pos):
+            # zip feature_vectors and tweet_texts for sampling
+            zipped = zip(test_set_vects_neg, test_set_texts_neg)
+            # randomly select elements
+            sampled_zipped = random.sample(zipped, len(test_set_vects_pos))
+            # unzip sampled elements
+            test_set_vects_neg, test_set_texts_neg = zip(*sampled_zipped)
+            test_set_vects_neg = list(test_set_vects_neg)
+            test_set_texts_neg = list(test_set_texts_neg)
+        ################################################################################################################
 
     if strip_thresh > 0:
         train_set_vects_pos = \

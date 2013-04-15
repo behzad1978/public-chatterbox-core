@@ -26,6 +26,10 @@ result_file_name = 'Results/cross_val'
 features_dict_file_name = 'features_dict'
 features_count_dict_file_name = 'features_count_dict'
 table_file_name = 'Results/cross_val_table'
+# the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
+# These phrases must not exist - and, hence, excluded - from the feature space.
+neg_train_labs = funcs_worry.get_negative_phrases(collection_name)
+train_labs = neg_train_labs + [collection_name] + ['worry'] + ['worries'] + ['worrie'] +['worr']
 
 ########################################################################################################################
 remove_retweets = True
@@ -56,6 +60,7 @@ cost = 10
 nu = 0.05
 # Assign different costs to balance unbalanced (different sized) training sets.
 balance_sets = True
+use_even_test_sets = True
 ########################################################################################################################
 
 labels_pos = []
@@ -138,18 +143,13 @@ else:
     my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in negatives])
     my_util.write_csv_file(home_dir + source_dir + collection_name, False, True, [[t] for t in positives])
 
-    print 'creating feature vectors...'
+    print 'creating feature vectors...\n'
 
     #the very first index is always 1.
     if new_normalisation_flag:
         max_index = 0
     else:
         max_index = 1
-
-    # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
-    # These phrases must not exist - and, hence, excluded - from the feature space.
-    neg_train_labs = funcs_worry.get_negative_phrases(collection_name)
-    train_labs = neg_train_labs + [collection_name]
 
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
         positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
@@ -278,6 +278,28 @@ for strip_thresh in strip_thresholds:
                 c_train_and_test = features_count_dict_train[a]
                 diff = int(c_train_and_test - c_test)
                 features_count_dict_train[a] = diff
+
+        ################################################################################################################
+        if use_even_test_sets:
+            if len(test_set_vects_pos) > len(test_set_vects_neg):
+                # zip feature_vectors and tweet_texts for sampling
+                zipped = zip(test_set_vects_pos, test_set_texts_pos)
+                # randomly select elements
+                sampled_zipped = random.sample(zipped, len(test_set_vects_neg))
+                # unzip sampled elements
+                test_set_vects_pos, test_set_texts_pos = list(zip(*sampled_zipped))
+                test_set_vects_pos = list(test_set_vects_pos)
+                test_set_texts_pos = list(test_set_texts_pos)
+            elif len(test_set_vects_neg) > len(test_set_vects_pos):
+                # zip feature_vectors and tweet_texts for sampling
+                zipped = zip(test_set_vects_neg, test_set_texts_neg)
+                # randomly select elements
+                sampled_zipped = random.sample(zipped, len(test_set_vects_pos))
+                # unzip sampled elements
+                test_set_vects_neg, test_set_texts_neg = zip(*sampled_zipped)
+                test_set_vects_neg = list(test_set_vects_neg)
+                test_set_texts_neg = list(test_set_texts_neg)
+        ################################################################################################################
 
         if strip_thresh > 0:
             train_set_vects_pos = \

@@ -14,10 +14,7 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
-collection_name = 'worried'
-collection_name_oth = 'relaxed'
-source_file = 'source' + '_' + collection_name
-source_file_oth = 'source' + '_' + collection_name_oth
+collection_names = ['worried', 'relaxed']
 source_file_noDup = source_file + '_noDup'
 source_file_noDup_oth = source_file_oth + '_noDup'
 saving_dir = '/Chatterbox_UCL_Advance/Worry/worried_vs_relaxed/'
@@ -59,18 +56,23 @@ nu = 0.05
 # Assign different costs to balance unbalanced (different sized) training sets.
 balance_sets = True
 ########################################################################################################################
+# a dict in the form of {'collection_name' : tweets}
+tweets_dict = {}
+positive_tweets = {}
+negative_tweets = {}
+train_labs = {}
 
 labels_pos = []
 labels_neg = []
 all_labels = []
-feature_vects_pos = []
-feature_vects_neg = []
-all_feature_vects = []
-tweet_texts_pos = []
-tweet_texts_neg = []
-all_texts = []
-norm_factors_pos = []
-norm_factors_neg = []
+feature_vects_pos = {}
+feature_vects_neg = {}
+all_feature_vects = {}
+tweet_texts_pos = {}
+tweet_texts_neg = {}
+all_texts = {}
+norm_factors_pos = {}
+norm_factors_neg = {}
 
 # {'feature' : feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
 # when using svm, an address represents a dimension on the input-space. So it is important to keep the address
@@ -139,43 +141,33 @@ if read_data_from_file:
 else:
 
     if remove_retweets:
-        try:
-            tweets_noDup = my_util.read_csv_file(home_dir + source_dir + source_file_noDup, False, True)
-            tweets = [t[0] for t in tweets_noDup]
+        # read input data.
+        for collection_name in collection_names:
+            # read unique (not re-tweeted) tweets:
+            tweets = my_util.read_csv_file(home_dir + source_dir + 'source_' + collection_name + '_noDup', False, True)
+            tweets = [t[0] for t in tweets]
             tweets = [t.lower() for t in tweets]
             # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
             # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
             tweets = [' '.join(t.split()) for t in tweets]
-
-            tweets_noDup_oth = my_util.read_csv_file(home_dir + source_dir + source_file_noDup_oth, False, True)
-            tweets_oth = [t[0] for t in tweets_noDup_oth]
-            tweets_oth = [t.lower() for t in tweets_oth]
-            # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
-            # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
-            tweets_oth = [' '.join(t.split()) for t in tweets_oth]
-        except IOError:
+            tweets[collection_name] = tweets
+    else:
+        for collection_name in collection_names:
             #read the source file --> [[text1], [text2], [test3], ...]
-            tweets = my_util.read_csv_file(home_dir + source_dir + source_file, False, True)
+            tweets = my_util.read_csv_file(home_dir + source_dir + 'source_' + collection_name , False, True)
             #create list of texts --> [text1, text2, text3, ...]
             tweets = [t[0] for t in tweets]
             tweets = funcs_worry.remove_retweets(tweets, use_qr_to_remove_dups)
-            my_util.write_csv_file(home_dir + source_dir + source_file_noDup, False, True, [[t] for t in tweets])
+            # write unique tweets data to file:
+            my_util.write_csv_file(home_dir + source_dir + 'source_' + '_noDup', False, True, [[t] for t in tweets])
+            tweets_dict[collection_name] = tweets
 
-            #read the source file --> [[text1], [text2], [test3], ...]
-            tweets_oth = my_util.read_csv_file(home_dir + source_dir + source_file_oth, False, True)
-            #create list of texts --> [text1, text2, text3, ...]
-            tweets_oth = [t[0] for t in tweets_oth]
-            tweets_oth = funcs_worry.remove_retweets(tweets_oth, use_qr_to_remove_dups)
-            my_util.write_csv_file(home_dir + source_dir + source_file_noDup_oth, False, True, [[t] for t in tweets_oth])
-
-    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name, tweets)
-    positives_oth, negatives_oth = funcs_worry.find_pos_neg_tweets(collection_name_oth, tweets_oth)
-
-    my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in negatives])
-    my_util.write_csv_file(home_dir + source_dir + collection_name, False, True, [[t] for t in positives])
-
-    my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_oth, False, True, [[t] for t in negatives_oth])
-    my_util.write_csv_file(home_dir + source_dir + collection_name_oth, False, True, [[t] for t in positives_oth])
+    # divide tweets into pos and neg sets
+    for collection_name, tweets in tweets_dict:
+        positive_tweets[collection_name], negative_tweets[collection_name] = funcs_worry.find_pos_neg_tweets(collection_name, tweets)
+        # write data into csv file:
+        my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in positive_tweets[collection_name]])
+        my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in negative_tweets[collection_name]])
 
     print 'creating feature vectors...'
 
@@ -185,39 +177,50 @@ else:
     else:
         max_index = 1
 
-    feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+    for collection_name in collection_names:
+        extra = []
+        neg_train_lab = funcs_worry.get_negative_phrases(collection_name)
+        # our collection_name usually ends with 'ed' (like 'worried', 'concerned').
+        # We remove 'ed' to get 'worri' (for worries) and 'concern'
+        truncated = collection_name[ : len(collection_name) - 2 ]
+        if collection_name == 'worried':
+            extra = ['worr']
+        train_labs[collection_name] = neg_train_lab + [collection_name] + [truncated] + extra
 
-    feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+    for collection_name, tweets in positive_tweets:
+        feature_vects_pos[collection_name], tweet_texts_pos[collection_name], max_index, norm_factors_pos[collection_name] = \
+            funcs_worry.get_sparse_feature_vector_worry(tweets, features_dict, features_count_dict, max_index, m, n,
+            remove_stpwds_for_unigrams, new_normalisation_flag, train_labs[collection_name])
 
-    feature_vects_pos_oth, tweet_texts_pos_oth, max_index, norm_factors_pos_oth = funcs_worry.get_sparse_feature_vector_worry(
-        positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag)
-
-    # feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
-    #     negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag)
+    for collection_name, tweets in negative_tweets:
+        feature_vects_neg[collection_name], tweet_texts_neg[collection_name], max_index, norm_factors_neg[collection_name] = \
+            funcs_worry.get_sparse_feature_vector_worry(tweets, features_dict, features_count_dict, max_index, m, n,
+            remove_stpwds_for_unigrams, new_normalisation_flag, train_labs[collection_name])
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
-    # labels_pos = [labels['pos']] * len(feature_vects_pos)
-    # labels_neg = [labels['neg']] * len(feature_vects_neg)
-    # # labels_pos = [labels['oth']] * len(feature_vects_pos)
-    #
-    # all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
-    # all_labels = labels_pos + labels_neg #+labels_oth
-    # all_texts = tweet_texts_pos + tweet_texts_neg #+tweet_texts_oth
-    # all_norm_factors = norm_factors_pos + norm_factors_neg #+ norm_factors_oth
+    labels_pos = [labels['pos']] * len(feature_vects_pos)
+    labels_neg = [labels['neg']] * len(feature_vects_neg)
+    # labels_pos = [labels['oth']] * len(feature_vects_pos)
 
-    # The following lines save features and labels in files to be read when we want to read them from file and not creating again.
-    # funcs_worry.write_labels_features_in_libsvm_form(all_labels, all_feature_vects, home_dir + source_dir + labels_features_file_name)
-    # my_util.write_csv_file(home_dir + source_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
-    # my_util.write_csv_file(home_dir + source_dir + norm_factor_file_name, False, True, [[n] for n in all_norm_factors])
-    # #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
-    # feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
-    # my_util.write_csv_file(home_dir + source_dir + features_dict_file_name, True, True, feature_list)
-    # #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
-    # feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-    # my_util.write_csv_file(home_dir + source_dir + features_count_dict_file_name, False, True, feature_count_list)
+    #The following lines save features and labels in files to be read when we want to read them from file and not
+    # creating again.
+    for collection_name in collection_names:
+        all_feature_vects[collection_name] = feature_vects_pos[collection_name] + feature_vects_neg[collection_name]
+        all_labels[collection_name] = labels_pos[collection_name] + labels_neg[collection_name]
+        all_texts[collection_name] = tweet_texts_pos[collection_name] + tweet_texts_neg[collection_name]
+        all_norm_factors[collection_name] = norm_factors_pos[collection_name] + norm_factors_neg[collection_name]
+
+
+    funcs_worry.write_labels_features_in_libsvm_form(all_labels, all_feature_vects, home_dir + source_dir + labels_features_file_name)
+    my_util.write_csv_file(home_dir + source_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
+    my_util.write_csv_file(home_dir + source_dir + norm_factor_file_name, False, True, [[n] for n in all_norm_factors])
+    #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
+    feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
+    my_util.write_csv_file(home_dir + source_dir + features_dict_file_name, True, True, feature_list)
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+    my_util.write_csv_file(home_dir + source_dir + features_count_dict_file_name, False, True, feature_count_list)
 
     # visualising_thresh = 50
 # funcs.write_features_and_freqs_to_csv(feature_vects_pos, features_count_dict_pos, visualising_thresh, source_dir + file_dir + collection_name + "_count_pos")

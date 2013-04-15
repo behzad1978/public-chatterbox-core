@@ -64,6 +64,11 @@ def check_feature(f, stopword_flag, train_labs):
         #     return True
         # else:
         return False
+############################################### extra line added by behzad #############################################
+    for g in train_labs:
+        if g in f:
+            return False
+########################################################################################################################
     if "www" in f:
         return False
     for short in shorteners:
@@ -390,14 +395,11 @@ def remove_duplicate_tweets(tweets_list, use_quick_ratio, thresh):
 
 def truncate_and_remove_duplicates(tweets, trunc_size):
     #a trunc_size of 2 or 3 sounds reasonable!
+
     clustered_tweets = []#cluster duplicated/similar tweets together
 
-    #split tweet texts
-    truncs = [t.split() for t in tweets]
     #truncate the beginning and the end of tweets. If very short, then don't truncate.
-    truncs = [t[trunc_size : len(t) - trunc_size] for t in truncs if len(t) > 2*trunc_size]
-    #stick back the split truncated tweets
-    truncs = [' '.join(t) for t in truncs]
+    truncs = [t[trunc_size : len(t) - trunc_size] for t in tweets if len(t) > 2*trunc_size]
     #this dict is used to retrieve original tweets later
     trunc_tweet_dict = dict( zip(truncs, tweets) )
 
