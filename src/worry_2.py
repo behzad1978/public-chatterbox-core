@@ -32,10 +32,11 @@ features_count_dict_file_name = 'features_count_dict'
 table_file_name = 'Results/table'
 # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
 # These phrases must not exist - and, hence, excluded - from the feature space.
-neg_train_labs = funcs_worry.get_negative_phrases(collection_name)
-train_labs = neg_train_labs + [collection_name] + ['worry'] + ['worries'] + ['worrie'] + ['worr']
+neg_train_labs_1 = funcs_worry.get_negative_phrases(collection_name)
+train_labs_1 = neg_train_labs_1 + [collection_name] + ['worry'] + ['worries'] + ['worrie'] + ['worr']
 neg_train_labs_oth = funcs_worry.get_negative_phrases(collection_name_oth)
 train_labs_oth = neg_train_labs_oth + [collection_name_oth] + ['concern']
+train_labs = train_labs_1 + train_labs_oth
 
 ########################################################################################################################
 remove_retweets = True
@@ -44,7 +45,7 @@ remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
 n_fold_cross_val = 10
-strip_thresholds = [0]#, 1, 100, 250, 500, 750, 1000]
+strip_thresholds = [0, 1, 100, 250, 500, 750, 1000]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -152,10 +153,10 @@ if remove_retweets:
         negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     feature_vects_pos_oth, tweet_texts_pos_oth, max_index, norm_factors_pos_oth = funcs_worry.get_sparse_feature_vector_worry(
-        positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, train_labs_oth)
+        positives_oth, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
-        negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs_oth)
+        negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
