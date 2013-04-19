@@ -44,8 +44,7 @@ use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
-n_fold_cross_val = 10
-strip_thresholds = [0, 1, 100, 250, 500, 750, 1000]
+strip_thresholds = [1000, 2000]#[0, 1, 100, 250, 500, 750, 1000]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -158,6 +157,8 @@ if remove_retweets:
     feature_vects_neg_oth, tweet_texts_neg_oth, max_index, norm_factors_neg_oth = funcs_worry.get_sparse_feature_vector_worry(
         negatives_oth, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
 
+    features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
+
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
     labels_pos = [labels['pos']] * len(feature_vects_pos)
@@ -233,6 +234,16 @@ for strip_thresh in strip_thresholds:
             test_set_texts_neg = list(test_set_texts_neg)
         ################################################################################################################
 
+    ################################################################################################################
+    train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
+    test_set_dim = funcs_worry.get_dimension_size(test_set_vects_pos + test_set_vects_neg)
+    train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
+    my_util.write_csv_file(home_dir + save_dir + 'train_features_before_stripping_' + str(strip_thresh), False, True, train_set_unique_features)
+    test_set_unique_features = [[features_dict_reverse[dim]] for dim in test_set_dim]
+    my_util.write_csv_file(home_dir + save_dir + 'test_features_before_stripping_' + str(strip_thresh), False, True, test_set_unique_features)
+    ################################################################################################################
+
+
     if strip_thresh > 0:
         train_set_vects_pos = \
             funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
@@ -246,6 +257,13 @@ for strip_thresh in strip_thresholds:
     # train sets and test sets are list of dictionaries (called vectors).
     train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
     test_set_dim = funcs_worry.get_dimension_size(test_set_vects_pos + test_set_vects_neg)
+
+    ################################################################################################################
+    train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
+    my_util.write_csv_file(home_dir + save_dir + 'train_features_bigger_than_' + str(strip_thresh), False, True, train_set_unique_features)
+    test_set_unique_features = [[features_dict_reverse[dim]] for dim in test_set_dim]
+    my_util.write_csv_file(home_dir + save_dir + 'test_features_bigger_than_' + str(strip_thresh), False, True, test_set_unique_features)
+    ################################################################################################################
 
     x_train = train_set_vects_pos + train_set_vects_neg
     y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg)
@@ -267,7 +285,7 @@ for strip_thresh in strip_thresholds:
     results.append(
         [strip_thresh,
          len(train_set_vects_pos), len(train_set_vects_neg), len(test_set_vects_pos), len(test_set_vects_neg),
-         train_set_dim, test_set_dim, accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']]
+         len(train_set_dim), len(test_set_dim), accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']]
     )
 
 # results = sorted(results, key=itemgetter(header.index('accuracy')))

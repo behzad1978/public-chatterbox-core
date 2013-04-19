@@ -16,11 +16,8 @@ import math
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
 saving_dir = '/Chatterbox_UCL_Advance/Worry/test/'
-collection_names = ['worried']#, 'relaxed']
 
 labels_features_file_name = 'labels_features'
-tweet_texts_file_name = 'all_tweet_texts'
-norm_factor_file_name = 'norm_factor'
 result_file_name = 'Results/cross_val'
 features_dict_file_name = 'features_dict'
 features_count_dict_file_name = 'features_count_dict'
@@ -31,7 +28,7 @@ remove_retweets = True
 use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
-read_data_from_file = False
+read_data_from_file = True
 # n must be greater or equal to 1 --> when equal to 1, there is no cross validation
 n_fold_cross_val = 2
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
@@ -71,38 +68,29 @@ neg = -1
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
 # put the label_value to None to exclude that set taking part in classification (neither training, nor test) .
-for collection_name in collection_names:
-    if collection_name == 'worried':
-        labels['pos'] = {collection_name: eval('pos')}
-        labels['neg'] = {collection_name: eval('neg')}
-    elif collection_name == 'concerned':
-        labels['pos'] = {collection_name: None}
-        labels['neg'] = {collection_name: None}
-    elif collection_name == 'relaxed':
-        labels['pos'] = {collection_name: None}
-        labels['neg'] = {collection_name: None}
 
-for collection_name in collection_names:
-    if collection_name == 'worried':
-        traiining_flag['pos'] = {collection_name: True}
-        traiining_flag['neg'] = {collection_name: True}
-    elif collection_name == 'concerned':
-        traiining_flag['pos'] = {collection_name: None}
-        traiining_flag['neg'] = {collection_name: None}
-    elif collection_name == 'relaxed':
-        traiining_flag['pos'] = {collection_name: None}
-        traiining_flag['neg'] = {collection_name: None}
+############################################# settings for 'worried' vs 'worried' ######################################
+# collection_names = ['worried']
+# labels['pos'] = {'worried' : eval('pos')}
+# labels['neg'] = {'worried' : eval('neg')}
+# traiining_flag['pos'] = {'worried': True}
+# traiining_flag['neg'] = {'worried': True}
+# test_flag['pos'] = {'worried': True}
+# test_flag['neg'] = {'worried': True}
+########################################################################################################################
 
-for collection_name in collection_names:
-    if collection_name == 'worried':
-        test_flag['pos'] = {collection_name: True}
-        test_flag['neg'] = {collection_name: True}
-    elif collection_name == 'concerned':
-        test_flag['pos'] = {collection_name: None}
-        test_flag['neg'] = {collection_name: None}
-    elif collection_name == 'relaxed':
-        test_flag['pos'] = {collection_name: None}
-        test_flag['neg'] = {collection_name: None}
+############################################# settings for 'worried' vs 'concerned' ######################################
+collection_names = ['worried', 'concerned']
+labels['pos'] = {'worried' : eval('pos')}
+labels['neg'] = {'worried' : eval('neg')}
+labels['pos'].update({'concerned' : eval('pos')})
+labels['neg'].update({'concerned' : eval('neg')})
+traiining_flag['pos'] = {'worried': True}
+traiining_flag['neg'] = {'worried': True}
+test_flag['pos'] = {'concerned': True}
+test_flag['neg'] = {'concerned': True}
+n_fold_cross_val = 1
+########################################################################################################################
 
 def initialise_dict(d):
     for l in labels.keys():
@@ -136,49 +124,62 @@ features_count_dict = dict()
 # if feature_vectors have been previously created, then we just read them from formerly created saved file.
 if read_data_from_file:
     # read labels and features.
-    # each row is in the following format: label \t address1:feature_value1 \t address2:feature_value2 \t ...
-    labels_features = my_util.read_csv_file(home_dir + source_dir + labels_features_file_name, True, True)
-    # read tweet_texts corresponding to the feature_vectors
-    tweet_texts = my_util.read_csv_file(home_dir + source_dir + tweet_texts_file_name, False, True)
+    # each row is in the following format:
+    # tweet_text \t norm_factor \t collection_name \t label \t address1:feature_value1 \t address2:feature_value2 \t ...
+    labels_features = my_util.read_csv_file(home_dir + saving_dir + labels_features_file_name, True, True)#source_dir + labels_features_file_name, True, True)
     # when creating feature_vectors, we count tokens resulted from the tweet_text. We then divide counts by a common
     # factor (normalisation factor) which is either the Nr. of tokens or the Nr. of features.
     # Normalisation factors are needed to create a separate feature_count_dict for the training set the , which is used
     # for stripping less frequent features to reduce the dimensionality of the feature space.
-    norm_factors = my_util.read_csv_file(home_dir + source_dir + norm_factor_file_name, False, True)
-    if len(labels_features) == len(tweet_texts):
-        # iterate through each row i
-        for i in range(len(labels_features)):
-            l_f = labels_features[i]
-            text = tweet_texts[i][0]
-            # the first element of the row is the label
-            l = int(l_f[0])
-            # the rest of the elements are the feature_vector
-            f = l_f[1:]
-            # read the normalisation factor corresponding to each feature_vector
-            n = int(norm_factors[i][0])
-            # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
-            f = [a_v.split(':') for a_v in f]
-            # create a dictionary (i.e. the feature_vector) in the form of { address : value }
-            vector = { int(a_v[0]): float(a_v[1]) for a_v in f }
-            if l == labels['pos']:
-                labels_pos.append(l)
-                feature_vects_pos.append(vector)
-                tweet_texts_pos.append(text)
-                norm_factors_pos.append(n)
-            elif l == labels['neg']:
-                labels_neg.append(l)
-                feature_vects_neg.append(vector)
-                tweet_texts_neg.append(text)
-                norm_factors_neg.append(n)
-            # elif l == labels['oth']:
-            #     labels_oth.append(l)
-            #     feature_vects_oth.append(vector)
-            #     tweet_texts_oth.append(text)
-            #     norm_factors_oth.append(n)
 
-    all_feature_vects = feature_vects_pos + feature_vects_neg# + feature_vects_oth
-    all_labels = labels_pos + labels_neg #+labels_oth
-    all_texts = tweet_texts_pos + tweet_texts_neg #+tweet_texts_oth
+    for label, collectionName_labelValue in labels.iteritems():
+        for collection_name, label_value in collectionName_labelValue.iteritems():
+            texts,
+            for i in range(len(labels_features)):
+                text_normFact_collectionName_label_feature = labels_features[i]
+                text = text_normFact_collectionName_label_feature[0]
+                # the normalisation factor corresponding to each feature_vector
+                norm_factor = int(text_normFact_collectionName_label_feature[1])
+                c = text_normFact_collectionName_label_feature[2]
+                l = int(text_normFact_collectionName_label_feature[3])
+                # the rest of the elements are the feature_vector
+                f = text_normFact_collectionName_label_feature[4:]
+                # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
+                f = [a_v.split(':') for a_v in f]
+                # create a dictionary (i.e. the feature_vector) in the form of { address : value }
+                vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
+
+
+
+    # iterate through each row i
+    for i in range(len(labels_features)):
+        text_normFact_collectionName_label_feature = labels_features[i]
+        text = text_normFact_collectionName_label_feature[0]
+        # the normalisation factor corresponding to each feature_vector
+        norm_factor = int(text_normFact_collectionName_label_feature[1])
+        c = text_normFact_collectionName_label_feature[2]
+        l = int(text_normFact_collectionName_label_feature[3])
+        # the rest of the elements are the feature_vector
+        f = text_normFact_collectionName_label_feature[4:]
+        # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
+        f = [a_v.split(':') for a_v in f]
+        # create a dictionary (i.e. the feature_vector) in the form of { address : value }
+        vector = { int(a_v[0]): float(a_v[1]) for a_v in f }
+        for label, collectionName_labelValue in labels.iteritems():
+            for collection_name, label_value in collectionName_labelValue.iteritems():
+                if l == label_value and c == collection_name:
+                    try:
+                        tweet_texts[label][collection_name].update(text)
+                    except KeyError:
+                        tweet_texts[label][collection_name] = text
+                    try:
+                        norm_factors[label][collection_name].update(norm_factor)
+                    except KeyError:
+                        norm_factors[label][collection_name] = norm_factor
+                    try:
+                        feature_vects[label][collection_name].update(vector)
+                    except KeyError:
+                        feature_vects[label][collection_name] = vector
 
     #read features_dict file --> csv (tab deliminated)
     feature_list = my_util.read_csv_file(home_dir + source_dir + features_dict_file_name, True, True)
@@ -232,10 +233,11 @@ else:
 
     train_labs, all_train_labs = get_train_labs(collection_names)
 
-    # create feature_vectors
     initialise_dict(feature_vects)
     initialise_dict(tweet_texts)
     initialise_dict(norm_factors)
+
+    # create feature_vectors
     for label, collectionName_labelValue in labels.iteritems():
         for collection_name, label_value in collectionName_labelValue.iteritems():
             if label_value <> None:
@@ -248,7 +250,7 @@ else:
 
     #The following lines save features and labels in files to be read when we want to read them from file and not
     # creating again.
-    all_feature_vects, all_labels, all_texts, all_norm_factors = [], [], [], []
+    all_collection_names, all_feature_vects, all_labels, all_texts, all_norm_factors = [], [], [], [], []
     for label, collectionName_labelValue in labels.iteritems():
         for collection_name, label_value in collectionName_labelValue.iteritems():
             if label_value <> None:
@@ -256,10 +258,11 @@ else:
                 all_labels = all_labels + [label_value] * len(feature_vects[label][collection_name])
                 all_texts = all_texts + tweet_texts[label][collection_name]
                 all_norm_factors = all_norm_factors + norm_factors[label][collection_name]
+                all_collection_names = all_collection_names+[collection_name]*len(feature_vects[label][collection_name])
 
-    funcs_worry.write_labels_features_in_libsvm_form(all_labels, all_feature_vects, home_dir + saving_dir + labels_features_file_name)
-    my_util.write_csv_file(home_dir + saving_dir + tweet_texts_file_name, False, True, [[t] for t in all_texts])
-    my_util.write_csv_file(home_dir + saving_dir + norm_factor_file_name, False, True, [[n] for n in all_norm_factors])
+    funcs_worry.write_labels_features_in_libsvm_form(all_texts, all_norm_factors, all_collection_names,
+                                                     all_labels, all_feature_vects,
+                                                     home_dir + saving_dir + labels_features_file_name)
     #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
     feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
     my_util.write_csv_file(home_dir + source_dir + features_dict_file_name, True, True, feature_list)
@@ -332,18 +335,22 @@ for label, collectionName_labelValue in labels.iteritems():
             tweet_texts[label][collection_name], norm_factors[label][collection_name])
 
 results = []
-n_fold_CV = '%d_fold_CV' % n_fold_cross_val
-header = ['strip_thresh',
-          n_fold_CV, 'tr_size_pos', 'tr_size_neg', 'tr_size_oth', 'ts_size_pos', 'ts_size_neg', 'ts_size_oth',
-          'accuracy', 'precision_pos', 'precision_neg', 'precision_zero', 'recall_pos', 'recall_neg', 'recall_zero']
-
+header = ['strip_thresh', '%d_fold_CV' % n_fold_cross_val]
+for label in labels.keys():
+    header = header + ['tr_size_' + label]
+for label in labels.keys():
+    header = header + ['ts_size_' + label]
+header = header + ['accuracy']
+for label in labels.keys():
+    header = header + ['precision_' + label] + ['recall_' + label]
 results.append(header)
 
 for strip_thresh in strip_thresholds:
 
     strt_pos = 0
     end_pos = 0
-    results_CrossVal = []
+    results_CV = []
+
     for n in range(1, n_fold_cross_val+1):
 
         test_set_vects, test_set_tweet_texts, test_set_norm_factors = {}, {}, {}
@@ -388,7 +395,8 @@ for strip_thresh in strip_thresholds:
 
 
         x_train, y_train = [], []
-        training_sizes = {}
+        training_set_sizes = {}
+        test_set_sizes = {}
         x_test, y_test = [], []
         texts_test =[]
         normFactors_test=[]
@@ -399,22 +407,29 @@ for strip_thresh in strip_thresholds:
                 y_train = y_train + [labels[label][collection_name]] * len(train_set_vects[label][collection_name])
                 # store the size of all class sizes to create different weights for uneven training sets.
                 try:
-                    training_sizes[label] = training_sizes[label] + len(train_set_vects[label][collection_name])
+                    training_set_sizes[label] = training_set_sizes[label] + len(train_set_vects[label][collection_name])
                 except KeyError:
-                    training_sizes[label] = len(train_set_vects[label][collection_name])
+                    training_set_sizes[label] = len(train_set_vects[label][collection_name])
 
-                x_test = x_test + test_set_vects[label][collection_name]
-                y_test = y_test + [labels[label][collection_name]] * len(test_set_vects[label][collection_name])
-                texts_test = texts_test + test_set_tweet_texts[label][collection_name]
-                normFactors_test = normFactors_test + test_set_norm_factors[label][collection_name]
+                # if number of cross validation >= 2, it means that we have divided the data into training and test sets
+                if n_fold_cross_val > 1:
+                    x_test = x_test + test_set_vects[label][collection_name]
+                    y_test = y_test + [labels[label][collection_name]] * len(test_set_vects[label][collection_name])
+                    texts_test = texts_test + test_set_tweet_texts[label][collection_name]
+                    normFactors_test = normFactors_test + test_set_norm_factors[label][collection_name]
+                    try:
+                        test_set_sizes[label] = test_set_sizes[label] + len(test_set_vects[label][collection_name])
+                    except KeyError:
+                        test_set_sizes[label] = len(test_set_vects[label][collection_name])
 
         # add those elements that must be in the test set, but not in the training set.
         for label, collectionName_flag in test_flag.iteritems():
             for collection_name, flag in collectionName_flag.iteritems():
-                if flag and (traiining_flag[label][collection_name] == False):
-                    x_test = x_test + feature_vects[label][collection_name]
-                    texts_test = texts_test + tweet_texts[label][collection_name]
-                    normFactors_test = normFactors_test + norm_factors[label][collection_name]
+                x_test = x_test + feature_vects[label][collection_name]
+                y_test = y_test + [labels[label][collection_name]] * len(feature_vects[label][collection_name])
+                texts_test = texts_test + tweet_texts[label][collection_name]
+                normFactors_test = normFactors_test + norm_factors[label][collection_name]
+                test_set_sizes[label] = len(feature_vects[label][collection_name])
 
         # we need to create two new dicts: one for training and one for test. count all the feature
         #in the test set. this gives the test dict count. subtract this from the original one to get the training dict.
@@ -432,35 +447,44 @@ for strip_thresh in strip_thresholds:
             x_test = funcs_worry.strip_less_than(x_test, features_count_dict_train, strip_thresh)
 
         class_labels = { k : eval(k) for k in labels.keys() }
-        svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, class_labels, training_sizes)
+        svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, class_labels, training_set_sizes)
         p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
-        prediction_result, accuracy, precisions, recalls = \
-            funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
+        prediction_result, accuracy, precisions, recalls = funcs_worry.calc_prediction_stats_2(y_test, texts_test,
+                                                                                               p_label, labels)
 
         my_util.write_csv_file(home_dir + saving_dir + result_file_name + str(n + 1) + '_' + str(accuracy) + '%', False,
                                True, prediction_result)
 
-        results_CrossVal.append(
-            [strip_thresh, n + 1,
-             len(train_set_vects_pos), len(train_set_vects_neg), len(train_set_vects_pos_oth),
-             len(test_set_vects_pos), len(test_set_vects_neg), len(test_set_vects_pos_oth),
-             accuracy, precisions['pos'], precisions['neg'], precisions['oth'], recalls['pos'], recalls['neg'], recalls['oth']]
-        )
+        result_CV = [strip_thresh, n]
+        for label in labels.keys():
+            result_CV = result_CV + [training_set_sizes[label]]
+        for label in labels.keys():
+            result_CV = result_CV + [test_set_sizes[label]]
+        result_CV = result_CV + [accuracy]
+        for label in labels.keys():
+            result_CV = result_CV + [precisions[label]] + [recalls[label]]
 
-    results_CrossVal = sorted(results_CrossVal, key=itemgetter(header.index('accuracy')))
-    results_CrossVal.reverse()
-    means = [''] * header.index(n_fold_CV) + ['mean']#shift the mean to the right, so that it comes under n_fold_CV
+        results_CV.append(result_CV)
 
-    stdevs = [''] * header.index(n_fold_CV) + ['stdev']
-    for column in range(header.index('tr_size_pos'), len(header)):
-        data = [row[column] for row in results_CrossVal]
+    # sort results based on accuracy
+    results_CV = sorted(results_CV, key=itemgetter(header.index('accuracy')))
+    results_CV.reverse()
+
+    #shift the mean and stdev to the right, so that it comes under n_fold_CV
+    means = [''] * header.index('%d_fold_CV' % n_fold_cross_val) + ['mean']
+    stdevs = [''] * header.index('%d_fold_CV' % n_fold_cross_val) + ['stdev']
+
+    for column in range(header.index('%d_fold_CV' % n_fold_cross_val)+1, len(header)):
+        data = [row[column] for row in results_CV]
         mean, stdev = math_extra.calc_mean_stdev(data)
         means = means + [round(mean, 2)]
         stdevs = stdevs + [round(stdev, 2)]
-    results_CrossVal = results_CrossVal + [means] + [stdevs]
 
-    results.append([''] * len(header))#append an empty row
-    results = results + results_CrossVal
+    results_CV = results_CV + [means] + [stdevs]
+
+    results = results + results_CV
+    #append an empty row
+    results.append([''] * len(header))
 
 my_util.write_csv_file(home_dir + saving_dir + table_file_name + '_' + str(means[header.index('accuracy')]) + '%',
                        False, True, results)

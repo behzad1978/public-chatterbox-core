@@ -219,6 +219,7 @@ def get_features_dict_reverse(features_dict):
     create a reverse dictionary to ba able to call the address of a feature and get the feature itself.
     mainly used for debug purpose.
     """
+    features_dict_reverse = {}
     features_dict_reverse = {v:f for f,v in features_dict.iteritems()}
     return features_dict_reverse
 
@@ -426,7 +427,8 @@ def remove_retweets(tweets, use_qr_to_remove_dups):
 
     return tweets
 
-def write_labels_features_in_libsvm_form(labels, features, file_name):
+def write_labels_features_in_libsvm_form(texts, norm_factors, collection_names, labels, features, file_name):
+
     """
     this function creates a tab deliminator csv file of the labels and features in libsvm format:
     label dimention_nr1:feature1 dimention_nr2:feature2 ...
@@ -437,10 +439,13 @@ def write_labels_features_in_libsvm_form(labels, features, file_name):
     final_list = []
     if len(labels) == len(features):
         for i in range(0, len(labels)):
+            text = texts[i]
+            norm_factor = norm_factors[i]
+            collection_name = collection_names[i]
             l = labels[i]
             feature_dict = features[i]
             feature_list = [str(k) + ":" + str(v) for k, v in feature_dict.iteritems()]
-            the_list = [str(l)] + feature_list
+            the_list = [text] + [norm_factor] + [collection_name] + [l] + feature_list
             final_list.append(the_list)
     my_util.write_csv_file(file_name, True, True, final_list)
 
@@ -604,4 +609,5 @@ def get_dimension_size(list_of_vectors):
         dimensions = dimensions + v.keys()
     # now only keep unique dimensions as vectors share some similar dimensions
     dimensions = set(dimensions)
-    return len(dimensions)
+
+    return dimensions
