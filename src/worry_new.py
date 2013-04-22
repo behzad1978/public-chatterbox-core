@@ -12,6 +12,7 @@ import funcs_worry
 import copy
 from operator import itemgetter
 import math
+from collections import defaultdict
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
@@ -24,13 +25,16 @@ features_count_dict_file_name = 'features_count_dict'
 table_file_name = 'Results/table'
 
 ########################################################################################################################
+problem_type = 'worried_vs_worried'
+#problem_type = 'worried_vs_concerned'
 remove_retweets = True
 use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
-read_data_from_file = True
+read_data_from_file = False
+even_size_test_sets = True
 # n must be greater or equal to 1 --> when equal to 1, there is no cross validation
-n_fold_cross_val = 2
+n_fold_cross_val = 10
 strip_thresholds = [0]#[0, 1, 2, 3, 4, 5, 10, 15, 20]
 random.seed(7)
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
@@ -52,12 +56,11 @@ balance_sets = True
 ########################################################################################################################
 # dict in the form of {'collection_name' : +1/-1/0}
 labels = {}
-traiining_flag = {}
+training_flag = {}
 test_flag = {}
 # dict in the form of {'collection_name' : tweets}
 input_tweets = {}
 tweets = {}
-train_labs = {}
 feature_vects = {}
 tweet_texts = {}
 norm_factors = {}
@@ -70,26 +73,26 @@ neg = -1
 # put the label_value to None to exclude that set taking part in classification (neither training, nor test) .
 
 ############################################# settings for 'worried' vs 'worried' ######################################
-# collection_names = ['worried']
-# labels['pos'] = {'worried' : eval('pos')}
-# labels['neg'] = {'worried' : eval('neg')}
-# traiining_flag['pos'] = {'worried': True}
-# traiining_flag['neg'] = {'worried': True}
-# test_flag['pos'] = {'worried': True}
-# test_flag['neg'] = {'worried': True}
-########################################################################################################################
-
-############################################# settings for 'worried' vs 'concerned' ######################################
-collection_names = ['worried', 'concerned']
-labels['pos'] = {'worried' : eval('pos')}
-labels['neg'] = {'worried' : eval('neg')}
-labels['pos'].update({'concerned' : eval('pos')})
-labels['neg'].update({'concerned' : eval('neg')})
-traiining_flag['pos'] = {'worried': True}
-traiining_flag['neg'] = {'worried': True}
-test_flag['pos'] = {'concerned': True}
-test_flag['neg'] = {'concerned': True}
-n_fold_cross_val = 1
+if problem_type == 'worried_vs_worried':
+    collection_names = ['worried']
+    labels['pos'] = {'worried' : eval('pos')}
+    labels['neg'] = {'worried' : eval('neg')}
+    training_flag['pos'] = {'worried': True}
+    training_flag['neg'] = {'worried': True}
+    test_flag['pos'] = {'worried': True}
+    test_flag['neg'] = {'worried': True}
+############################################# settings for 'worried' vs 'concerned' ####################################
+elif 'worried_vs_concerned':
+    collection_names = ['worried', 'concerned']
+    labels['pos'] = {'worried' : eval('pos')}
+    labels['neg'] = {'worried' : eval('neg')}
+    labels['pos'].update({'concerned' : eval('pos')})
+    labels['neg'].update({'concerned' : eval('neg')})
+    training_flag['pos'] = {'worried': True}
+    training_flag['neg'] = {'worried': True}
+    test_flag['pos'] = {'concerned': True}
+    test_flag['neg'] = {'concerned': True}
+    n_fold_cross_val = 1
 ########################################################################################################################
 
 def initialise_dict(d):
@@ -97,6 +100,7 @@ def initialise_dict(d):
         d[l] = {}
 
 def get_train_labs(collection_names):
+    train_labs = {}
     all_train_labs = []
     for collection_name in collection_names:
         extra = []
@@ -108,6 +112,12 @@ def get_train_labs(collection_names):
             extra = ['worr']
         train_labs[collection_name] = neg_train_lab + [collection_name] + [truncated] + extra
         all_train_labs = all_train_labs + neg_train_lab + [collection_name] + [truncated] + extra
+
+    if problem_type == 'worried_vs_worried':
+        for collection_name in collection_names:
+            train_labs[collection_name] = all_train_labs
+    if problem_type == 'worried_vs_concerned':
+        train_labs['concerned'] = []
     return train_labs, all_train_labs
 
 
@@ -120,6 +130,10 @@ features_dict_reverse = dict()
 #{feature_address (dimension no.) : freq_count} --> freq_count: absolute freq of ngram occurring in token.
 features_count_dict = dict()
 # whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
+
+initialise_dict(feature_vects)
+initialise_dict(tweet_texts)
+initialise_dict(norm_factors)
 
 # if feature_vectors have been previously created, then we just read them from formerly created saved file.
 if read_data_from_file:
@@ -134,52 +148,28 @@ if read_data_from_file:
 
     for label, collectionName_labelValue in labels.iteritems():
         for collection_name, label_value in collectionName_labelValue.iteritems():
-            texts,
+            texts, factors, vectors  = [], [], []
+            # iterate through each row i
             for i in range(len(labels_features)):
                 text_normFact_collectionName_label_feature = labels_features[i]
-                text = text_normFact_collectionName_label_feature[0]
-                # the normalisation factor corresponding to each feature_vector
-                norm_factor = int(text_normFact_collectionName_label_feature[1])
                 c = text_normFact_collectionName_label_feature[2]
                 l = int(text_normFact_collectionName_label_feature[3])
-                # the rest of the elements are the feature_vector
-                f = text_normFact_collectionName_label_feature[4:]
-                # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
-                f = [a_v.split(':') for a_v in f]
-                # create a dictionary (i.e. the feature_vector) in the form of { address : value }
-                vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
-
-
-
-    # iterate through each row i
-    for i in range(len(labels_features)):
-        text_normFact_collectionName_label_feature = labels_features[i]
-        text = text_normFact_collectionName_label_feature[0]
-        # the normalisation factor corresponding to each feature_vector
-        norm_factor = int(text_normFact_collectionName_label_feature[1])
-        c = text_normFact_collectionName_label_feature[2]
-        l = int(text_normFact_collectionName_label_feature[3])
-        # the rest of the elements are the feature_vector
-        f = text_normFact_collectionName_label_feature[4:]
-        # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
-        f = [a_v.split(':') for a_v in f]
-        # create a dictionary (i.e. the feature_vector) in the form of { address : value }
-        vector = { int(a_v[0]): float(a_v[1]) for a_v in f }
-        for label, collectionName_labelValue in labels.iteritems():
-            for collection_name, label_value in collectionName_labelValue.iteritems():
-                if l == label_value and c == collection_name:
-                    try:
-                        tweet_texts[label][collection_name].update(text)
-                    except KeyError:
-                        tweet_texts[label][collection_name] = text
-                    try:
-                        norm_factors[label][collection_name].update(norm_factor)
-                    except KeyError:
-                        norm_factors[label][collection_name] = norm_factor
-                    try:
-                        feature_vects[label][collection_name].update(vector)
-                    except KeyError:
-                        feature_vects[label][collection_name] = vector
+                if collection_name == c and label_value == l:
+                    text = text_normFact_collectionName_label_feature[0]
+                    # the normalisation factor corresponding to each feature_vector
+                    factor = int(text_normFact_collectionName_label_feature[1])
+                    # the rest of the elements are the feature_vector
+                    f = text_normFact_collectionName_label_feature[4:]
+                    # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
+                    f = [a_v.split(':') for a_v in f]
+                    # create a dictionary (i.e. the feature_vector) in the form of { address : value }
+                    vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
+                    texts.append(text)
+                    factors.append(factor)
+                    vectors.append(vector)
+            tweet_texts[label][collection_name] = texts
+            norm_factors[label][collection_name] = factors
+            feature_vects[label][collection_name] = vectors
 
     #read features_dict file --> csv (tab deliminated)
     feature_list = my_util.read_csv_file(home_dir + source_dir + features_dict_file_name, True, True)
@@ -187,6 +177,7 @@ if read_data_from_file:
     #read feature_count_dict file --> csv (coma separated)
     feature_count_list = my_util.read_csv_file(home_dir + source_dir + features_count_dict_file_name, False, True)
     features_count_dict = { int(a) : int(c) for a, c in feature_count_list }
+    features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
 
 else:
 
@@ -233,10 +224,6 @@ else:
 
     train_labs, all_train_labs = get_train_labs(collection_names)
 
-    initialise_dict(feature_vects)
-    initialise_dict(tweet_texts)
-    initialise_dict(norm_factors)
-
     # create feature_vectors
     for label, collectionName_labelValue in labels.iteritems():
         for collection_name, label_value in collectionName_labelValue.iteritems():
@@ -244,7 +231,9 @@ else:
                 data = tweets[label][collection_name]
                 feature_vects[label][collection_name], tweet_texts[label][collection_name], max_index, norm_factors[label][collection_name] = \
                     funcs_worry.get_sparse_feature_vector_worry(data, features_dict, features_count_dict, max_index, m,
-                                                    n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
+                                                    n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs[collection_name])
+
+    features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
 
     print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
@@ -365,7 +354,8 @@ for strip_thresh in strip_thresholds:
         print str(n_fold_cross_val) + '-fold cross validation in progress...\n'
         print 'iteration', n, '\n'
 
-        for label, collectionName_labelValue in traiining_flag.iteritems():
+        min_test_set_size = defaultdict(int)
+        for label, collectionName_labelValue in training_flag.iteritems():
             for collection_name, flag in collectionName_labelValue.iteritems():
                 # True flag means the data is used for training set.
                 if flag:
@@ -383,6 +373,8 @@ for strip_thresh in strip_thresholds:
                     test_set_norm_factors[label][collection_name]=norm_factors[label][collection_name][strt_pos:end_pos]
 
                     print 'test set size ' + label + ' :', len(test_set_vects[label][collection_name])
+                    if len(test_set_vects[label][collection_name]) < min_test_set_size[label]:
+                        min_test_set_size[label] = len(test_set_vects[label][collection_name])
 
                     # note: train-set size is not necessarily equal to the size of the whole data set minus the size of the test set.
                     # This is because still some duplicated tweets (re-tweets) may exist in the data set!
@@ -402,7 +394,6 @@ for strip_thresh in strip_thresholds:
         normFactors_test=[]
         for label, collectionName_vects in train_set_vects.iteritems():
             for collection_name, vects in collectionName_vects.iteritems():
-
                 x_train = x_train + train_set_vects[label][collection_name]
                 y_train = y_train + [labels[label][collection_name]] * len(train_set_vects[label][collection_name])
                 # store the size of all class sizes to create different weights for uneven training sets.
@@ -410,19 +401,34 @@ for strip_thresh in strip_thresholds:
                     training_set_sizes[label] = training_set_sizes[label] + len(train_set_vects[label][collection_name])
                 except KeyError:
                     training_set_sizes[label] = len(train_set_vects[label][collection_name])
-
                 # if number of cross validation >= 2, it means that we have divided the data into training and test sets
                 if n_fold_cross_val > 1:
-                    x_test = x_test + test_set_vects[label][collection_name]
-                    y_test = y_test + [labels[label][collection_name]] * len(test_set_vects[label][collection_name])
-                    texts_test = texts_test + test_set_tweet_texts[label][collection_name]
-                    normFactors_test = normFactors_test + test_set_norm_factors[label][collection_name]
+                    the_test_set = test_set_vects[label][collection_name]
+                    the_test_set_tweet_text = test_set_tweet_texts[label][collection_name]
+                    the_test_set_norm_factors = test_set_norm_factors[label][collection_name]
+
+                    if even_size_test_sets:
+                        # zip lists to be able to sample them the same.
+                        zipped = zip(the_test_set, the_test_set_tweet_text, the_test_set_norm_factors)
+                        # randomly select elements
+                        sampled_zipped = random.sample(zipped, min_test_set_size[label])
+                        # unzip sampled elements and convert them to list
+                        the_test_set, the_test_set_tweet_text, the_test_set_norm_factors = map(list, zip(*sampled_zipped))
+
+                    x_test = x_test + the_test_set
+                    y_test = y_test + [labels[label][collection_name]] * len(the_test_set)
+                    texts_test = texts_test + the_test_set_tweet_text
+                    normFactors_test = normFactors_test + the_test_set_norm_factors
                     try:
                         test_set_sizes[label] = test_set_sizes[label] + len(test_set_vects[label][collection_name])
                     except KeyError:
                         test_set_sizes[label] = len(test_set_vects[label][collection_name])
 
-        # add those elements that must be in the test set, but not in the training set.
+        # reset the dictionary
+        min_test_set_size = defaultdict(int)
+
+
+        # add extra elements that must be in the test set, but not in the training set.
         for label, collectionName_flag in test_flag.iteritems():
             for collection_name, flag in collectionName_flag.iteritems():
                 x_test = x_test + feature_vects[label][collection_name]
