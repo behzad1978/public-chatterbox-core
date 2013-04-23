@@ -41,7 +41,7 @@ use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
-strip_thresholds = [100]#, 250, 500, 750, 1000]
+strip_thresholds = [0]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -50,14 +50,14 @@ labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
 m = 1
 #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-n = 3
+n = 2
 ###################################################### libsvm settings #################################################
 # The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
 svm_type = 'C_SVC'#'nu_SVC'#
 # Set the kernel. linear --> 0; polynomial --> 1; radial basis --> 2; sigmoid --> 3; precomputed kernel --> 4
 kernel_type = 0
 # Set the cost parameter for the C_CSV
-cost = 10
+cost = 1
 # Set the nu parameter for the nu_SVC
 # Note: if nu is not small enough, the following error message is shown: "specified nu is infeasible"
 nu = 0.05
@@ -126,8 +126,7 @@ if remove_retweets:
         my_util.write_csv_file(home_dir + source_dir + source_file_noDup_test, False, True, [[t] for t in tweets_test])
 
     #create pos/neg sets for training set.
-    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets[:100])
-    tweets_test = tweets_test[:100]
+    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets)
 
     #save (write) pos/neg tweets in a file!
     my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
@@ -142,13 +141,13 @@ if remove_retweets:
         max_index = 1
 
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
+        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
 
     feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
+        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
 
     feature_vects_test, tweet_texts_test, max_index, norm_factors_test = funcs_worry.get_sparse_feature_vector_worry(
-        tweets_test, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, [])
+        tweets_test, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
     features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
 
@@ -259,7 +258,7 @@ for strip_thresh in strip_thresholds:
     for i in range(len(x_test)):
         prediction_result.append([test_set_texts[i], p_label[i], p_val[i][0]])
 
-    my_util.write_csv_file(home_dir+save_dir+result_file_name + '_ST'+str(strip_thresh), False,True, prediction_result)
+    my_util.write_csv_file(home_dir+save_dir+result_file_name + '_ST'+str(strip_thresh), False, True, prediction_result)
 
     # results.append(
     #     [strip_thresh,

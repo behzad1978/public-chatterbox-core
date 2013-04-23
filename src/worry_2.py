@@ -41,7 +41,7 @@ use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = True
 read_data_from_file = False
-strip_thresholds = [1000, 2000]#[0, 1, 100, 250, 500, 750, 1000]
+strip_thresholds = [0, 1, 100, 1000, 5000, 10000]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -123,9 +123,9 @@ if remove_retweets:
         my_util.write_csv_file(home_dir + source_dir + source_file_noDup_oth, False, True, [[t] for t in tweets_oth])
 
     #create pos/neg sets for training set.
-    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name, tweets[:100])
+    positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name, tweets)
     ##create pos/neg sets for test set.
-    positives_oth, negatives_oth = funcs_worry.find_pos_neg_tweets(collection_name_oth, tweets_oth[:100])
+    positives_oth, negatives_oth = funcs_worry.find_pos_neg_tweets(collection_name_oth, tweets_oth)
 
     #save (write) pos/neg tweets in a file!
     my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name, False, True, [[t] for t in negatives])

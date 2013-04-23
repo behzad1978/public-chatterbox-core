@@ -39,7 +39,7 @@ def exclude_url(split_text):
             no_url_tweet_text.append(t)
     return no_url_tweet_text
 
-def check_feature(f, stopword_flag, train_labs):
+def check_feature(f, stopword_flag, train_labs, random):
     global shorteners
     #print train_labs
     if f == "" or f == None:
@@ -60,14 +60,17 @@ def check_feature(f, stopword_flag, train_labs):
     if f == "rt":
         return False
     if f in train_labs:
-        # if random.randint(0, 10) == 5:
-        #     return True
-        # else:
-        return False
+        if random.randint(0, 10) == 5:
+            return True
+        else:
+            return False
 ############################################### extra line added by behzad #############################################
     for g in train_labs:
         if g in f:
-            return False
+            if random.randint(0, 10) == 5:
+                return True
+            else:
+                return False
 ########################################################################################################################
     if "www" in f:
         return False
@@ -78,10 +81,10 @@ def check_feature(f, stopword_flag, train_labs):
         return True
 
 
-def check_features(f_list, stopword_flag, train_labs):
+def check_features(f_list, stopword_flag, train_labs, random):
     #print f_list
     for f in f_list:
-        if not (check_feature(f, stopword_flag, train_labs)):
+        if not (check_feature(f, stopword_flag, train_labs, random)):
             return False
     return True
 
@@ -104,7 +107,7 @@ def add_to_dict(t, the_length, vector, features_dict, features_count_dict, max_i
 
     return max_index
 
-def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs):
+def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random):
     """
     this provides a term-frequency vector
     """
@@ -150,7 +153,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                 if i == 1:
                     stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
-                if check_features(tokens[j:j + i], stpwd_flag, train_labs):
+                if check_features(tokens[j:j + i], stpwd_flag, train_labs, random):
                     n_of_features += 1
                     t = " ".join(tokens[j:j + i])
 
@@ -186,13 +189,13 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     return vector, max_index, norm_factor
 
 
-def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs):
+def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random):
 
     feature_vectors = []
     tweet_texts = []
     normal_factors = []
     for ind, tweet in enumerate(tweet_list):
-        vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs)
+        vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
         feature_vectors.append(vector)
         #in general the tweet_texts should be tweet_list itself. We return this in case the order of the vector changes
         # during the loop.
@@ -200,7 +203,7 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
         normal_factors.append(normal_factor)
 
         if (ind % 1000) == 0:
-            print ind
+            print 'tweet_no.', ind
 
     return feature_vectors, tweet_texts, max_index, normal_factors
 
