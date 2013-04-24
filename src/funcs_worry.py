@@ -416,10 +416,6 @@ def truncate_and_remove_duplicates(tweets, trunc_size):
 def remove_retweets(tweets, use_qr_to_remove_dups):
     #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
     tweets = [t.lower() for t in tweets]
-    #put a space between any non punct char and a punct char
-    tweets = [re.sub(r"(?u)(\w)(\W)", r"\1 \2", t) for t in tweets]
-    #put a space between any punct char and a non punct char
-    tweets = [re.sub(r"(?u)(\W)([\w@#])", r"\1 \2", t) for t in tweets]
     #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
     tweets = [' '.join(t.split()) for t in tweets]
     #remove duplicates by direct comparison of the truncated strings

@@ -249,6 +249,7 @@ for strip_thresh in strip_thresholds:
 
     training_sizes = {'pos':len(train_set_vects_pos),'neg':len(train_set_vects_neg)}
     svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_sizes)
+    #svm_params = '-s 0 -t 0 -c 1 -w1 0.25 -w-1 1.25'
     p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
     print 'calculating validation statistics ...'
     # prediction_result, accuracy, precisions, recalls = \
