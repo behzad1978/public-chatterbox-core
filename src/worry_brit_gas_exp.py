@@ -33,7 +33,7 @@ table_file_name = 'Results/table'
 # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
 # These phrases must not exist - and, hence, excluded - from the feature space.
 neg_train_labs = funcs_worry.get_negative_phrases(collection_name_train)
-train_labs = neg_train_labs + [collection_name_train] + ['worry'] + ['worries'] + ['worrie'] + ['worr']
+pos_train_labs = [collection_name_train]# + ['worry'] + ['worries'] + ['worrie'] + ['worr']
 
 ########################################################################################################################
 remove_retweets = True
@@ -50,7 +50,7 @@ labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
 m = 1
 #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-n = 2
+n = 4
 ###################################################### libsvm settings #################################################
 # The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
 svm_type = 'C_SVC'#'nu_SVC'#
@@ -95,7 +95,7 @@ features_count_dict = dict()
 if remove_retweets:
     try:
         tweets_noDup = my_util.read_csv_file(home_dir + source_dir + source_file_noDup, False, True)
-        tweets = [t[0] for t in tweets_noDup]
+        tweets = [t[0] for t in tweets_noDup[:100]]
         tweets = [t.lower() for t in tweets]
         # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
         # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
@@ -109,7 +109,7 @@ if remove_retweets:
         my_util.write_csv_file(home_dir + source_dir + source_file_noDup, False, True, [[t] for t in tweets])
     try:
         tweets_noDup_test = my_util.read_csv_file(home_dir + source_dir + source_file_noDup_test, False, True)
-        tweets_test = [t[0] for t in tweets_noDup_test]
+        tweets_test = [t[0] for t in tweets_noDup_test[:100]]
         tweets_test = [t.lower() for t in tweets_test]
         # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
         # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
@@ -129,8 +129,8 @@ if remove_retweets:
     positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets)
 
     #save (write) pos/neg tweets in a file!
-    my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
-    my_util.write_csv_file(home_dir + source_dir + collection_name_train, False, True, [[t] for t in positives])
+    #my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
+    #my_util.write_csv_file(home_dir + source_dir + collection_name_train, False, True, [[t] for t in positives])
 
     print 'creating feature vectors...'
 
@@ -141,10 +141,10 @@ if remove_retweets:
         max_index = 1
 
     feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
+        positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs, random)
 
     feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
+        negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs, random)
 
     feature_vects_test, tweet_texts_test, max_index, norm_factors_test = funcs_worry.get_sparse_feature_vector_worry(
         tweets_test, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, [], random)

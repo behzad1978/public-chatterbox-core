@@ -60,18 +60,10 @@ def check_feature(f, stopword_flag, train_labs, random):
     if f == "rt":
         return False
     if f in train_labs:
-        if random.randint(0, 10) == 5:
+        if random.randint(1, 10) == 5:
             return True
         else:
             return False
-############################################### extra line added by behzad #############################################
-    for g in train_labs:
-        if g in f:
-            if random.randint(0, 10) == 5:
-                return True
-            else:
-                return False
-########################################################################################################################
     if "www" in f:
         return False
     for short in shorteners:
@@ -81,11 +73,40 @@ def check_feature(f, stopword_flag, train_labs, random):
         return True
 
 
-def check_features(f_list, stopword_flag, train_labs, random):
+def check_features(f_list, stopword_flag, train_labs, random, window_containing_f_list):
+    # train_labs is a list of training labels --> ['not really worried', ...]
     #print f_list
     for f in f_list:
         if not (check_feature(f, stopword_flag, train_labs, random)):
             return False
+
+    ############################################# lines added by behzad ################################################
+    f = " ".join(f_list)
+    # check whether the potential feature (f) is itself a training label!
+    if f in train_labs:
+        return False
+
+    containing_f = " ".join(window_containing_f_list)
+    for training_label in train_labs:
+        # f == "am not really worried", training_label == 'not really worried'
+        if training_label in f:
+            if random.randint(1, 10) == 5:
+                return True
+            else:
+                return False
+        # check whether the potential feature (f) is part of a training label!
+        # eg: f == 'never really' and a training label is 'never really worried'!
+        training_label_split = training_label.split()
+        n=len(f_list)
+        sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
+        if f_list in sublists:
+            if training_label in containing_f:
+                if random.randint(1, 10) == 5:
+                    return True
+                else:
+                    return False
+    ############################################ end of lines added by behzad ##########################################
+
     return True
 
 def add_to_dict(t, the_length, vector, features_dict, features_count_dict, max_index):
@@ -153,7 +174,7 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                 if i == 1:
                     stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
-                if check_features(tokens[j:j + i], stpwd_flag, train_labs, random):
+                if check_features(tokens[j:j + i], stpwd_flag, train_labs, random, tokens[max(0, j-3) : j + i + 3] ):
                     n_of_features += 1
                     t = " ".join(tokens[j:j + i])
 
