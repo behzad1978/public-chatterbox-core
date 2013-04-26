@@ -84,23 +84,31 @@ def check_features(f_list, stopword_flag, train_labs, random, window_containing_
     f = " ".join(f_list)
     # check whether the potential feature (f) is itself a training label!
     if f in train_labs:
-        return False
+        if random.randint(1, 10) == 5:
+            return True
+        else:
+            return False
 
-    containing_f = " ".join(window_containing_f_list)
+    window_containing_f = " ".join(window_containing_f_list)
     for training_label in train_labs:
-        # f == "am not really worried", training_label == 'not really worried'
+
+        # check whether the potential feature (f) contains a training label! If yes, discard it!
+        # eg: f == "am not really worried", training_label == 'not really worried'
         if training_label in f:
             if random.randint(1, 10) == 5:
                 return True
             else:
                 return False
-        # check whether the potential feature (f) is part of a training label!
+
+        # check whether the potential feature (f) is part of a training label! If yes, discard it!
         # eg: f == 'never really' and a training label is 'never really worried'!
+        # note: the code "f in training_label", does not work properly. For instance, if f == 'i' and
+        # training_label == 'worried' then "f in training_label" would be correct, which is not what we want!
         training_label_split = training_label.split()
         n=len(f_list)
         sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
         if f_list in sublists:
-            if training_label in containing_f:
+            if training_label in window_containing_f:
                 if random.randint(1, 10) == 5:
                     return True
                 else:
@@ -136,6 +144,10 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     #print tweet
     split_tweet_text = tweet.lower().split()
 
+    ####################################################################################################################
+    if "don't" in split_tweet_text:
+        print 'stop to debug'
+
     no_url_tweet_text = exclude_url(split_tweet_text)
     tweet_text = " ".join(no_url_tweet_text)
     #print tweet_text
@@ -151,8 +163,10 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     tweet_text = re.sub(" : p ", " :p ", tweet_text)
 
     #print tweet_text
-    #stick n't back together
+    # stick n't back together
+    # note: "don't" will turn to bigram "do n't"
     tweet_text = re.sub(r"(\w)n ' t\b", r"\1 n't", tweet_text)
+
     #print tweet_text
     tweet_text = re.sub(r" ([:;][-]?) ([DP]) ", r"\1\2", tweet_text)
     #print tweet_text
@@ -223,7 +237,7 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
         tweet_texts.append(tweet)
         normal_factors.append(normal_factor)
 
-        if (ind % 1000) == 0:
+        if (ind % 5000) == 0:
             print 'tweet_no.', ind
 
     return feature_vectors, tweet_texts, max_index, normal_factors
@@ -244,7 +258,8 @@ def get_features_dict_reverse(features_dict):
     mainly used for debug purpose.
     """
     features_dict_reverse = {}
-    features_dict_reverse = {v:f for f,v in features_dict.iteritems()}
+    #features_dict_reverse = {v:f for f,v in features_dict.iteritems()}
+    features_dict_reverse = dict([ (v,f) for f,v in features_dict.iteritems() ])
     return features_dict_reverse
 
 def make_feature_count_dict_test(features_count_dict, features_count_dict_train, features_dict_reverse):
@@ -386,11 +401,17 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
 
     # for every class in the test set calculate the respective precision and recall values.
     # do-something if x, else do-something else.
-    precisions = { l : round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2) if
-                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in class_labels.keys()}
+    # precisions = { l : round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2) if
+    #               (true_counts[l] + false_counts[l]) <> 0 else 0 for l in class_labels.keys()}
+    #
+    # recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if
+    #            n_samples[l] <> 0 else 0 for l in class_labels.keys() }
 
-    recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if
-               n_samples[l] <> 0 else 0 for l in class_labels.keys() }
+    precisions = dict([ (l , round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2)) if
+                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in class_labels.keys() ])
+
+    recalls = dict( [(l , round(float(true_counts[l]) / n_samples[l], 2)) if
+               n_samples[l] <> 0 else 0 for l in class_labels.keys() ])
 
     return prediction_result, accuracy, precisions, recalls
 
@@ -609,7 +630,8 @@ def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, c
             # each feature is a string in the form of address:feature_value --> separate address from feature: [a,v]
             f = [a_v.split(':') for a_v in f]
             # create a dictionary (i.e. the feature_vector) in the form of { address : value }
-            vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
+            #vector = {int(a_v[0]): float(a_v[1]) for a_v in f}
+            vector = dict([ (int(a_v[0]) , float(a_v[1])) for a_v in f ])
 
             # iterate through all given labels ('pos', 'neg', 'oth', ...) to put the feature-vectors read from file into
             # the right category. labels is a dict in the form of {'pos' : 1, 'neg' : -1, 'oth' : 0, ...}

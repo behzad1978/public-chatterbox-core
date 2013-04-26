@@ -15,6 +15,8 @@ import copy
 from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
+# source_dir = '/Worried_12/Sources/'
+# save_dir = '/Worried_12/worried_vs_no_hot_water/'
 source_dir = '/Chatterbox_UCL_Advance/Worry/Sources/'
 save_dir = '/Chatterbox_UCL_Advance/Worry/worried_vs_no_hot_water/'
 collection_name_train = 'worried'
@@ -26,10 +28,10 @@ source_file_noDup_test = source_file_test + '_noDup'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
 norm_factor_file_name = 'norm_factor'
-result_file_name = 'Results/result'
+result_file_name = 'result'
 features_dict_file_name = 'features_dict'
 features_count_dict_file_name = 'features_count_dict'
-table_file_name = 'Results/table'
+table_file_name = 'table'
 # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
 # These phrases must not exist - and, hence, excluded - from the feature space.
 neg_train_labs = funcs_worry.get_negative_phrases(collection_name_train)
@@ -50,7 +52,7 @@ labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
 m = 1
 #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-n = 4
+n = 3
 ###################################################### libsvm settings #################################################
 # The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
 svm_type = 'C_SVC'#'nu_SVC'#
@@ -129,8 +131,8 @@ if remove_retweets:
     positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets)
 
     #save (write) pos/neg tweets in a file!
-    #my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
-    #my_util.write_csv_file(home_dir + source_dir + collection_name_train, False, True, [[t] for t in positives])
+    my_util.write_csv_file(home_dir + source_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
+    my_util.write_csv_file(home_dir + source_dir + collection_name_train, False, True, [[t] for t in positives])
 
     print 'creating feature vectors...'
 
@@ -182,18 +184,18 @@ for strip_thresh in strip_thresholds:
 
     # We need to create a new dicts just for training set. Count all the feature in the test set.
     # This gives the test dict count. Subtract this from the original one to get the training dict.
-    features_count_dict_train = copy.deepcopy(features_count_dict)
-    all_test_set_vects = test_set_vects
-    for i in range(len(all_test_set_vects)):
-        if (i % 1000) == 0:
-            print 'creating training dictionary', i
-        vect = all_test_set_vects[i]
-        fact = norm_factors_test[i]
-        for a, r in vect.iteritems():
-            c_test = r * fact
-            c_train_and_test = features_count_dict_train[a]
-            diff = int(c_train_and_test - c_test)
-            features_count_dict_train[a] = diff
+    # features_count_dict_train = copy.deepcopy(features_count_dict)
+    # all_test_set_vects = test_set_vects
+    # for i in range(len(all_test_set_vects)):
+    #     if (i % 1000) == 0:
+    #         print 'creating training dictionary', i
+    #     vect = all_test_set_vects[i]
+    #     fact = norm_factors_test[i]
+    #     for a, r in vect.iteritems():
+    #         c_test = r * fact
+    #         c_train_and_test = features_count_dict_train[a]
+    #         diff = int(c_train_and_test - c_test)
+    #         features_count_dict_train[a] = diff
 
     ################################################################################################################
     if use_even_test_sets:
@@ -218,28 +220,28 @@ for strip_thresh in strip_thresholds:
         ################################################################################################################
 
     ################################################################################################################
-    train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
-    test_set_dim = funcs_worry.get_dimension_size(test_set_vects)
-    train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
-    my_util.write_csv_file(home_dir + save_dir + 'train_features_before_stripping_' + str(strip_thresh), False, True, train_set_unique_features)
-    test_set_unique_features = [[features_dict_reverse[dim]] for dim in test_set_dim]
-    my_util.write_csv_file(home_dir + save_dir + 'test_set_unique_features' + str(strip_thresh), False, True, test_set_unique_features)
-    ################################################################################################################
-
-
-    if strip_thresh > 0:
-        train_set_vects_pos = \
-            funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
-        train_set_vects_neg = \
-            funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
-
-    # train sets and test sets are list of dictionaries (called vectors).
-    train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
-
-    ################################################################################################################
-    train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
-    my_util.write_csv_file(home_dir + save_dir + 'train_features_bigger_than_' + str(strip_thresh), False, True, train_set_unique_features)
-    ################################################################################################################
+    # train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
+    # test_set_dim = funcs_worry.get_dimension_size(test_set_vects)
+    # train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
+    # my_util.write_csv_file(home_dir + save_dir + 'train_features_before_stripping_' + str(strip_thresh), False, True, train_set_unique_features)
+    # test_set_unique_features = [[features_dict_reverse[dim]] for dim in test_set_dim]
+    # my_util.write_csv_file(home_dir + save_dir + 'test_set_unique_features' + str(strip_thresh), False, True, test_set_unique_features)
+    # ################################################################################################################
+    #
+    #
+    # if strip_thresh > 0:
+    #     train_set_vects_pos = \
+    #         funcs_worry.strip_less_than(train_set_vects_pos, features_count_dict_train, strip_thresh)
+    #     train_set_vects_neg = \
+    #         funcs_worry.strip_less_than(train_set_vects_neg, features_count_dict_train, strip_thresh)
+    #
+    # # train sets and test sets are list of dictionaries (called vectors).
+    # train_set_dim = funcs_worry.get_dimension_size(train_set_vects_pos + train_set_vects_neg)
+    #
+    # ################################################################################################################
+    # train_set_unique_features = [[features_dict_reverse[dim]] for dim in train_set_dim]
+    # my_util.write_csv_file(home_dir + save_dir + 'train_features_bigger_than_' + str(strip_thresh), False, True, train_set_unique_features)
+    # ################################################################################################################
 
     x_train = train_set_vects_pos + train_set_vects_neg
     y_train = [labels['pos']] * len(train_set_vects_pos) + [labels['neg']] * len(train_set_vects_neg)
