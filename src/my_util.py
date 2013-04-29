@@ -4,6 +4,7 @@ import pickle
 import csv
 
 def write_csv_file(file_name, tab_delimiter_flag, unicode_flag, arg):
+    print 'writing file:', file_name
     f_w = open(file_name + '.csv', 'w')
     if unicode_flag:
         if tab_delimiter_flag:
@@ -19,6 +20,7 @@ def write_csv_file(file_name, tab_delimiter_flag, unicode_flag, arg):
     f_w.close()
 
 def read_csv_file(file_name, tab_delimiter_flag, unicode_flag):
+    print 'reading file:', file_name
     contents = []
     f_r = open(file_name + '.csv', 'r')
     if unicode_flag:

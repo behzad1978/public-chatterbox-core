@@ -145,8 +145,8 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
     split_tweet_text = tweet.lower().split()
 
     ####################################################################################################################
-    if "don't" in split_tweet_text:
-        print 'stop to debug'
+    # if "don't" in split_tweet_text:
+    #     print 'stop to debug'
 
     no_url_tweet_text = exclude_url(split_tweet_text)
     tweet_text = " ".join(no_url_tweet_text)
