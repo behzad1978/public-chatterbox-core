@@ -15,18 +15,16 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_1/'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_5/test/'
 collection_name_train = 'worried'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
-norm_factor_file_name = 'norm_factor'
-features_dict_file_name = 'features_dict'
-features_dict_reverse_file_name = 'features_dict_reverse'
-features_count_dict_file_name = 'features_count_dict'
 table_file_name = 'table'
 # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
 # These phrases must not exist - and, hence, excluded - from the feature space.
-neg_train_labs = funcs_worry.get_negative_phrases(collection_name_train)
+#neg_train_labs = funcs_worry.get_negative_phrases(collection_name_train)
+neg_train_labs = my_util.read_csv_file(home_dir + source_dir + 'neg_phrases_short_list', False, True)
+neg_train_labs = [l[0] for l in neg_train_labs]
 pos_train_labs = [collection_name_train]# + ['worry'] + ['worries'] + ['worrie'] + ['worr']
 
 # All of the positive tweets for test set are extracted from the file 'heating'.
@@ -37,8 +35,7 @@ neg_train_labs_test_set = []
 remove_retweets = True
 use_qr_to_remove_dups = False
 remove_stpwds_for_unigrams = False
-new_normalisation_flag = True
-read_data_from_file = False
+new_normalisation_flag = False
 strip_thresholds = [0]
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
@@ -118,18 +115,48 @@ tweets_test_others = [t.lower() for t in tweets_test_others]
 tweets_test_others = [' '.join(t.split()) for t in tweets_test_others]
 print 'data size:', len(tweets_test_others)
 
-print 'creating pos/neg sets for training set ...'
+############################### remove intersection of training and test sets ##########################################
+def remove_intersection_from_training_set(training_set, test_set):
+    intersection = [t for t in test_set if t in training_set]
+    training_set = [t for t in training_set if t not in intersection]
+    print 'intersection size between training and test sets removed:', len(intersection)
+    return training_set
+########################################################################################################################
+
+#print 'creating pos/neg sets for training set ...'
+#tweets_train = remove_intersection_from_training_set(tweets_train, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
 #create pos/neg sets for training set.
-positives, negatives = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets_train)
-negatives = negatives[:len(positives)]
-print 'finished creating pos/neg sets!'
+#positives, negatives, n_containing_tweets = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets_train)
+#my_util.write_csv_file(home_dir + save_dir + 'n_neg_phrases_used', False, True, n_containing_tweets)
+#save (write) pos/neg tweets in a file!
+#my_util.write_csv_file(home_dir + save_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
+#my_util.write_csv_file(home_dir + save_dir + collection_name_train, False, True, [[t] for t in positives])
+#print 'finished creating pos/neg sets!'
+
+positives = my_util.read_csv_file(home_dir + source_dir + 'worried', False, True)
+negatives = my_util.read_csv_file(home_dir + source_dir + 'not_worried', False, True)
+positives = [t[0] for t in positives]
+negatives = [t[0] for t in negatives]
+
+positives = remove_intersection_from_training_set(positives, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
+negatives = remove_intersection_from_training_set(negatives, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
+
+positives = positives[:10000]
+negatives = negatives[:10000]
 
 positives_test = tweets_test_worry
 negatives_test = tweets_test_not_worry + tweets_test_others
 
-#save (write) pos/neg tweets in a file!
-my_util.write_csv_file(home_dir + save_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
-my_util.write_csv_file(home_dir + save_dir + collection_name_train, False, True, [[t] for t in positives])
+# c_pos=0
+# for t in positives:
+#     toks = t.split()
+#     c_pos += len([tok for tok in toks if tok == 'worried'])
+# print 'number of worrieds in positive set:', c_pos
+# c_neg=0
+# for t in negatives:
+#     toks = t.split()
+#     c_neg += len([tok for tok in toks if tok == 'worried'])
+# print 'number of worrieds in negative set:', c_neg
 
 
 print 'creating feature vectors...'
@@ -143,8 +170,30 @@ else:
 feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
     positives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs, random)
 
+#create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training_pos', False, True, feature_count_list)
+
+########################################################################################################
+# address = features_dict['worried']
+# c = features_count_dict[address]
+# print 'address_pos_worried', address
+# print 'count of worried', c
+########################################################################################################
+
 feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
     negatives, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs, random)
+
+########################################################################################################
+# address = features_dict['worried']
+# c = features_count_dict[address]
+# print 'address_pos_worried', address
+# print 'count of worried', c
+########################################################################################################
+
+#create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training', False, True, feature_count_list)
 
 feature_vects_test_pos, tweet_texts_test_pos, max_index, norm_factors_test_pos = funcs_worry.get_sparse_feature_vector_worry(
     positives_test, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs_test_set, random)
@@ -152,19 +201,20 @@ feature_vects_test_pos, tweet_texts_test_pos, max_index, norm_factors_test_pos =
 feature_vects_test_neg, tweet_texts_test_neg, max_index, norm_factors_test_neg = funcs_worry.get_sparse_feature_vector_worry(
     negatives_test, features_dict, features_count_dict, max_index, m, n,  remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs_test_set, random)
 
+n_distinct_features = len(features_dict)
 print 'feature vectors created!', 'No of distinct features:', len(features_dict)
 
 features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
 
 #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
 feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + features_dict_file_name, True, True, feature_list)
+my_util.write_csv_file(home_dir + save_dir + 'features_dict', True, True, feature_list)
 #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
 feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + features_count_dict_file_name, False, True, feature_count_list)
-
+my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_all', False, True, feature_count_list)
+#create a list from feature_dict in the form of [ [address, 'feature'], ...] to save in a csv file (tab deliminated)
 feature_reverse_list = [list(z) for z in zip(features_dict_reverse.keys(), features_dict_reverse.values())]
-my_util.write_csv_file(home_dir + save_dir + features_dict_reverse_file_name, False, True, feature_reverse_list)
+my_util.write_csv_file(home_dir + save_dir + 'features_dict_reverse', True, True, feature_reverse_list)
 
 # high_prob_features_pos, high_prob_features_neg = funcs_worry.calc_probs(features_dict, feature_vects_neg, feature_vects_pos)
 # my_util.write_csv_file(source_dir + file_dir + collection_name + '_high_probs_pos', False, True, high_prob_features_pos)
@@ -260,15 +310,27 @@ for strip_thresh in strip_thresholds:
     p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
     print 'calculating validation statistics ...'
     prediction_result, accuracy, precisions, recalls = \
-        funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, labels)
+        funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, p_val, labels)
 
-    prediction_result_with_value=[]
-    for i in range(len(x_test)):
-        prediction_result_with_value.append([test_set_texts[i], p_label[i], p_val[i][0]])
+    print 'accuracy', accuracy
+    print 'precisions', precisions
+    print 'recalls', recalls
+
+    # prediction_result_with_value=[]
+    # for i in range(len(x_test)):
+    #     prediction_result_with_value.append([test_set_texts[i], p_label[i], p_val[i][0]])
 
     my_util.write_csv_file(home_dir+save_dir+'result' + '_ST'+str(strip_thresh), False, True, prediction_result)
 
-    my_util.write_csv_file(home_dir+save_dir+'result_with_vals' + '_ST'+str(strip_thresh), False, True, prediction_result_with_value)
+    statistics = []
+    statistics.append(['ngram', 'n_distinct_features', 'svm_params',
+                       'train_set_size_pos', 'train_set_size_neg', 'test_set_size_pos', 'test_set_size_neg',
+                       'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg'])
+    statistics.append([n, n_distinct_features, svm_params,
+                       len(positives), len(negatives), len(positives_test), len(negatives_test),
+                       accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']])
+    my_util.write_csv_file(home_dir + save_dir + 'statistics' + '_ST' + str(strip_thresh), False, True, statistics)
+    #my_util.write_csv_file(home_dir+save_dir+'result_with_vals' + '_ST'+str(strip_thresh), False, True, prediction_result_with_value)
 
     # results.append(
     #     [strip_thresh,

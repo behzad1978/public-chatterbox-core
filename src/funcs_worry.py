@@ -76,43 +76,49 @@ def check_feature(f, stopword_flag, train_labs, random):
 def check_features(f_list, stopword_flag, train_labs, random, window_containing_f_list):
     # train_labs is a list of training labels --> ['not really worried', ...]
     #print f_list
+
     for f in f_list:
         if not (check_feature(f, stopword_flag, train_labs, random)):
             return False
 
     ############################################# lines added by behzad ################################################
-    f = " ".join(f_list)
-    # check whether the potential feature (f) is itself a training label!
-    if f in train_labs:
-        if random.randint(1, 10) == 5:
-            return True
-        else:
-            return False
-
-    window_containing_f = " ".join(window_containing_f_list)
-    for training_label in train_labs:
-
-        # check whether the potential feature (f) contains a training label! If yes, discard it!
-        # eg: f == "am not really worried", training_label == 'not really worried'
-        if training_label in f:
+    feature = " ".join(f_list)
+    # check whether the potential feature is itself a training label!
+    # eg.: f_list == ['never', 'worried'] --> feature == 'never worried' and training_label == 'never worried'
+    if len(f_list)>1:
+        if feature in train_labs:
             if random.randint(1, 10) == 5:
                 return True
             else:
                 return False
 
-        # check whether the potential feature (f) is part of a training label! If yes, discard it!
-        # eg: f == 'never really' and a training label is 'never really worried'!
-        # note: the code "f in training_label", does not work properly. For instance, if f == 'i' and
-        # training_label == 'worried' then "f in training_label" would be correct, which is not what we want!
-        training_label_split = training_label.split()
-        n=len(f_list)
-        sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
-        if f_list in sublists:
-            if training_label in window_containing_f:
+    window_containing_f = " ".join(window_containing_f_list)
+    for training_label in train_labs:
+
+        # check whether the potential feature contains a training label! If yes, discard it!
+        # eg: feature == "am not really worried", training_label == 'not really worried'
+        if len(f_list) > 1:
+            if training_label in feature:
                 if random.randint(1, 10) == 5:
                     return True
                 else:
                     return False
+
+        # check whether the potential feature is part of a training label! If yes, discard it!
+        # eg: feature == 'never really' and a training label is 'never really worried'!
+        # note: the code "feature in training_label", does not work properly. For instance, if feature == 'i' and
+        # training_label == 'worried' then "feature in training_label" would be correct, which is not what we want!
+        training_label_split = training_label.split()
+        #if training_label is just a single word, then the feature cannot contain the training_label.
+        if len(training_label_split)>1:
+            n=len(f_list)
+            sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
+            if f_list in sublists:
+                if training_label in window_containing_f:
+                    if random.randint(1, 10) == 5:
+                        return True
+                    else:
+                        return False
     ############################################ end of lines added by behzad ##########################################
 
     return True
@@ -237,7 +243,7 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
         tweet_texts.append(tweet)
         normal_factors.append(normal_factor)
 
-        if (ind % 5000) == 0:
+        if (ind % 1000) == 0:
             print 'tweet_no.', ind
 
     return feature_vectors, tweet_texts, max_index, normal_factors
@@ -360,13 +366,13 @@ def calc_prediction_stats(y_test, tweet_texts, p_label, labels):
     return prediction_result, accuracy, precisions, recalls
 
 
-def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
+def calc_prediction_stats_2(y_test, tweet_texts, p_label, p_val, class_labels):
     # y_test is the list of desired labels which are supposed to be predicted.
     # tweet_texts is the list of tweet_texts in the test set, corresponding (1-1) to labels in the y_test.
     # p_label is a list of predicted labels
     # class_labels is a dict containing classification label types: {'pos':1, 'neg':-1, 'oth':0}
     prediction_result = []
-    header = ['text', 'original_label', 'predicted_label', 'prediction_success']
+    header = ['text', 'original_label', 'predicted_label', 'predicted_value', 'prediction_success']
     prediction_result.append(header)
     # defaultdict is part of the collections module that can have default values (like int) and does not give key_error
     # true_counts records the number of correct predictions for each label-type in the whole test-set.
@@ -381,6 +387,7 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
         text = tweet_texts[i]
         original_label = y_test[i]
         predicted_label = int(p_label[i])
+        predicted_value = p_val[i]
         prediction_success = 'wrong'
 
         for l, j in class_labels.iteritems():
@@ -395,7 +402,7 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
                 false_counts[l] += 1
 
         # when saved in csv format, this is a file showing the predicted state of each element in the test set.
-        prediction_result.append([text, original_label, predicted_label, prediction_success])
+        prediction_result.append([text, original_label, predicted_label, predicted_value, prediction_success])
 
     accuracy = round(float(sum(true_counts.values())) / len(y_test), 2)
 
@@ -416,57 +423,66 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, class_labels):
     return prediction_result, accuracy, precisions, recalls
 
 
-def remove_duplicate_tweets(tweets_list, use_quick_ratio, thresh):
+def remove_duplicate_tweets(tweets, use_quick_ratio, thresh):
+    # make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
+    tweets = [t.lower() for t in tweets]
+    # remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
+    tweets = [' '.join(t.split()) for t in tweets]
     clustered_tweets = []#cluster duplicated/similar tweets together
-    while len(tweets_list) > 0:
-        t = tweets_list[0]
+    while len(tweets) > 0:
+        t = tweets[0]
         if use_quick_ratio:
             #using the quick_ratio() is very time consuming!
             #note that without lower-casing the strings, the quick_ratio() does not work correctly.
             #so the string must have become lower-case before.
-            duplicates = [s for s in tweets_list if difflib.SequenceMatcher(None, s, t).quick_ratio() > thresh]
+            duplicates = [s for s in tweets if difflib.SequenceMatcher(None, s, t).quick_ratio() > thresh]
         else:
             #note: the string must have become lower-case before this stage.
-            duplicates = [s for s in tweets_list if s == t]
+            duplicates = [s for s in tweets if s == t]
 
         clustered_tweets.append([t, len(duplicates)])
-        tweets_list = [x for x in tweets_list if x not in duplicates]
+        tweets = [x for x in tweets if x not in duplicates]
         if len(duplicates) > 1:
             print len(duplicates), 'duplicate: ', t
             for d in duplicates:
                 print d
-        print 'removing duplicates ... tweets remained:', len(tweets_list)
+        print 'removing duplicates ... tweets remained:', len(tweets)
     unique_tweets = [d[0] for d in clustered_tweets]#take one element from each cluster
-    return unique_tweets#ß, clustered_tweets
+    return unique_tweets#, clustered_tweets
 
-def truncate_and_remove_duplicates(tweets, trunc_size):
-    #a trunc_size of 2 or 3 sounds reasonable!
+# def truncate_and_remove_duplicates(tweets, trunc_size):
+# this function has a bug!!!!!!!!!! truncating causes tweets to not be the same size so they cannot be compared!
+#     # trunc_size, is the number of words we want to remove from the beginning and end of a tweet.
+#     # trunc_size of 2 or 3 sounds reasonable!
+#
+#     clustered_tweets = []#cluster duplicated/similar tweets together
+#
+#     # split tweets to be able to truncate n number of words from the beginning and the end of tweets.
+#     splited_tweets = [t.split() for t in tweets]
+#     #truncate the beginning and the end of tweets. If very short, then don't truncate.
+#     truncs = [t[trunc_size : len(t) - trunc_size] if len(t) > 2*trunc_size else t for t in splited_tweets]
+#     truncs = [' '.join(t) for t in truncs]
+#     #this dict is used to retrieve original tweets later
+#     trunc_tweet_dict = dict( zip(truncs, tweets) )
+#
+#     unique_truncs = remove_duplicate_tweets(truncs, False, None)
+#     unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
+#
+#     return unique_tweets
 
-    clustered_tweets = []#cluster duplicated/similar tweets together
 
-    #truncate the beginning and the end of tweets. If very short, then don't truncate.
-    truncs = [t[trunc_size : len(t) - trunc_size] for t in tweets if len(t) > 2*trunc_size]
-    #this dict is used to retrieve original tweets later
-    trunc_tweet_dict = dict( zip(truncs, tweets) )
-
-    unique_truncs = remove_duplicate_tweets(truncs, False, None)
-    unique_tweets = [trunc_tweet_dict[s] for s in unique_truncs]
-
-    return unique_tweets
-
-
-def remove_retweets(tweets, use_qr_to_remove_dups):
-    #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
-    tweets = [t.lower() for t in tweets]
-    #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
-    tweets = [' '.join(t.split()) for t in tweets]
-    #remove duplicates by direct comparison of the truncated strings
-    tweets = truncate_and_remove_duplicates(tweets, 4)
-    if use_qr_to_remove_dups:
-        #remove duplicates by direct comparison of strings
-        tweets = remove_duplicate_tweets(tweets, True, 0.89)
-
-    return tweets
+# def remove_retweets(tweets, use_qr_to_remove_dups):
+#     #make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
+#     tweets = [t.lower() for t in tweets]
+#     #remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
+#     tweets = [' '.join(t.split()) for t in tweets]
+#     #remove duplicates by direct comparison of the truncated strings
+#     tweets = truncate_and_remove_duplicates(tweets, 4)
+#     if use_qr_to_remove_dups:
+#         #remove duplicates by direct comparison of strings
+#         tweets = remove_duplicate_tweets(tweets, True, 0.89)
+#
+#     return tweets
 
 def write_labels_features_in_libsvm_form(texts, norm_factors, collection_names, labels, features, file_name):
 
@@ -591,6 +607,7 @@ def get_negative_phrases(keyword):
 
 def find_pos_neg_tweets(keyword, tweets):
 
+    n_containing_tweets = []
     neg_phrases = get_negative_phrases(keyword)
 
     #select tweets containing negative signs and put them in the negative set.
@@ -600,11 +617,12 @@ def find_pos_neg_tweets(keyword, tweets):
         temp = [t for t in positives if s in t]
         negatives = negatives + temp
         positives = [t for t in positives if t not in temp]
+        n_containing_tweets.append([s, len(temp)])
 
     print keyword + ':', len(positives)
     print 'not_' + keyword + ':', len(negatives)
 
-    return positives, negatives
+    return positives, negatives, n_containing_tweets
 
 def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, class_labels):
 
