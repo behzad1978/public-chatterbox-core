@@ -10,6 +10,9 @@ import stopwords
 import svmutil
 from collections import defaultdict
 
+phrase_symbol_dict = {}
+symbol = 'behzad'
+
 #list of URL shorteners.
 shorteners = ["t.co", "goo.gl", "img.ly", "bit.ly", "is.gd", "tinyurl.com", "is.gd", "tr.im", "ow.ly", "cli.gs",
               "twurl.nl", "Digg.com", "u.mavrev.com", "tiny.cc", "short.to", "BudURL.com", "snipr.com", "6url.com",
@@ -81,45 +84,54 @@ def check_features(f_list, stopword_flag, train_labs, random, window_containing_
         if not (check_feature(f, stopword_flag, train_labs, random)):
             return False
 
-    ############################################# lines added by behzad ################################################
-    feature = " ".join(f_list)
-    # check whether the potential feature is itself a training label!
-    # eg.: f_list == ['never', 'worried'] --> feature == 'never worried' and training_label == 'never worried'
-    if len(f_list)>1:
-        if feature in train_labs:
+    #################################### behzad ######################
+    for f in f_list:
+        if symbol in f:
             if random.randint(1, 10) == 5:
                 return True
             else:
                 return False
+    ##################################################################
 
-    window_containing_f = " ".join(window_containing_f_list)
-    for training_label in train_labs:
-
-        # check whether the potential feature contains a training label! If yes, discard it!
-        # eg: feature == "am not really worried", training_label == 'not really worried'
-        if len(f_list) > 1:
-            if training_label in feature:
-                if random.randint(1, 10) == 5:
-                    return True
-                else:
-                    return False
-
-        # check whether the potential feature is part of a training label! If yes, discard it!
-        # eg: feature == 'never really' and a training label is 'never really worried'!
-        # note: the code "feature in training_label", does not work properly. For instance, if feature == 'i' and
-        # training_label == 'worried' then "feature in training_label" would be correct, which is not what we want!
-        training_label_split = training_label.split()
-        #if training_label is just a single word, then the feature cannot contain the training_label.
-        if len(training_label_split)>1:
-            n=len(f_list)
-            sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
-            if f_list in sublists:
-                if training_label in window_containing_f:
-                    if random.randint(1, 10) == 5:
-                        return True
-                    else:
-                        return False
-    ############################################ end of lines added by behzad ##########################################
+    # ############################################# lines added by behzad ################################################
+    # feature = " ".join(f_list)
+    # # check whether the potential feature is itself a training label!
+    # # eg.: f_list == ['never', 'worried'] --> feature == 'never worried' and training_label == 'never worried'
+    # if len(f_list)>1:
+    #     if feature in train_labs:
+    #         if random.randint(1, 10) == 5:
+    #             return True
+    #         else:
+    #             return False
+    #
+    # window_containing_f = " ".join(window_containing_f_list)
+    # for training_label in train_labs:
+    #
+    #     # check whether the potential feature contains a training label! If yes, discard it!
+    #     # eg: feature == "am not really worried", training_label == 'not really worried'
+    #     if len(f_list) > 1:
+    #         if training_label in feature:
+    #             if random.randint(1, 10) == 5:
+    #                 return True
+    #             else:
+    #                 return False
+    #
+    #     # check whether the potential feature is part of a training label! If yes, discard it!
+    #     # eg: feature == 'never really' and a training label is 'never really worried'!
+    #     # note: the code "feature in training_label", does not work properly. For instance, if feature == 'i' and
+    #     # training_label == 'worried' then "feature in training_label" would be correct, which is not what we want!
+    #     training_label_split = training_label.split()
+    #     #if training_label is just a single word, then the feature cannot contain the training_label.
+    #     if len(training_label_split)>1:
+    #         n=len(f_list)
+    #         sublists = [ training_label_split[i:i+n] for i in range(len(training_label_split)-n+1) ]
+    #         if f_list in sublists:
+    #             if training_label in window_containing_f:
+    #                 if random.randint(1, 10) == 5:
+    #                     return True
+    #                 else:
+    #                     return False
+    # ############################################ end of lines added by behzad ##########################################
 
     return True
 
@@ -195,8 +207,12 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
                     stpwd_flag = True
             for j in xrange(0, len(tokens) - (i - 1)):
                 if check_features(tokens[j:j + i], stpwd_flag, train_labs, random, tokens[max(0, j-3) : j + i + 3] ):
+
                     n_of_features += 1
                     t = " ".join(tokens[j:j + i])
+                    # if 'behzad' in t:
+                    #     print ''
+                    t = t.replace('behzad', '')
 
                     if new_normalisation_flag:
                         if t not in features_dict:
@@ -235,6 +251,19 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
     feature_vectors = []
     tweet_texts = []
     normal_factors = []
+
+    # for i in range(len(train_labs)):
+    #     print train_labs[i]
+    #     #put a space between any non punct char and a  punct char
+    #     train_labs[i] = re.sub(r"([^'\".,;:/?\!@#£$%^&*()_\-=+`~])(['\".,;:/?\!@#£$%^&*()_\-=+`~])", r"\1 \2", train_labs[i])
+    #     print train_labs[i]
+    #     #put a space between any punct char and a non punct char
+    #     train_labs[i] = re.sub(r"(['\".,;:/?\!£$%^&*()_\-=+`~])([^'\".,;:/?\!@#£$%^&*()_\-=+`~#@])", r"\1 \2", train_labs[i])
+    #     print train_labs[i]
+    #     # stick n't back together
+    #     train_labs[i] = re.sub(r"(\w)n ' t\b", r"\1 n't", train_labs[i])
+    #     print train_labs[i]
+
     for ind, tweet in enumerate(tweet_list):
         vector, max_index, normal_factor = get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n, remove_stpwds_for_unigrams, new_normalisation_flag, train_labs, random)
         feature_vectors.append(vector)
@@ -604,25 +633,35 @@ def get_negative_phrases(keyword):
 
     return neg_phrases
 
+def symbolise_phrases(phrase_list):
+    global phrase_symbol_dict
+    global symbol
+    for phrase in phrase_list:
+        #print phrase
+        phrase_symbolised = ' '.join([symbol+tok for tok in phrase.split()])
+        #print phrase_symbolised
+        phrase_symbol_dict[phrase] = phrase_symbolised
+    return phrase_symbol_dict
 
-def find_pos_neg_tweets(keyword, tweets):
+def find_pos_neg_tweets(neg_phrases, tweets):
 
+    phrase_symbol_dict = symbolise_phrases(neg_phrases)
     n_containing_tweets = []
-    neg_phrases = get_negative_phrases(keyword)
 
     #select tweets containing negative signs and put them in the negative set.
     positives = tweets[:]
     negatives = []
     for s in neg_phrases:
-        temp = [t for t in positives if s in t]
-        negatives = negatives + temp
-        positives = [t for t in positives if t not in temp]
-        n_containing_tweets.append([s, len(temp)])
+        negative_s = [t for t in positives if s in t]
+        negative_s_symbolised = [t.replace(s, phrase_symbol_dict[s], 1) for t in negative_s]
+        negatives = negatives + [t for t in negative_s_symbolised]
+        positives = [t for t in positives if t not in negative_s]
+        n_containing_tweets.append([s, len(negative_s)])
 
-    print keyword + ':', len(positives)
-    print 'not_' + keyword + ':', len(negatives)
+    print 'no. of positives:', len(positives)
+    print 'no. of negatives:', len(negatives)
 
-    return positives, negatives, n_containing_tweets
+    return positives, negatives, n_containing_tweets, phrase_symbol_dict
 
 def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, class_labels):
 

@@ -15,7 +15,7 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_5/test/'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_7/'
 collection_name_train = 'worried'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
@@ -45,7 +45,7 @@ labels = { 'pos' : +1, 'neg' : -1}#, 'oth' : 0}
 #m=1: starts from unigram; m=2: starts from bigram; m=3: starts from trigram
 m = 1
 #length of ngram --> n=1: unigram; n=2: bigram; n=3: trigram
-n = 3
+n = 2
 ###################################################### libsvm settings #################################################
 # The nu_CSV does not take the C parameter (i.e. the cost function). Hence, there is no weight balancing option.
 svm_type = 'C_SVC'#'nu_SVC'#
@@ -123,26 +123,34 @@ def remove_intersection_from_training_set(training_set, test_set):
     return training_set
 ########################################################################################################################
 
-#print 'creating pos/neg sets for training set ...'
-#tweets_train = remove_intersection_from_training_set(tweets_train, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
-#create pos/neg sets for training set.
-#positives, negatives, n_containing_tweets = funcs_worry.find_pos_neg_tweets(collection_name_train, tweets_train)
-#my_util.write_csv_file(home_dir + save_dir + 'n_neg_phrases_used', False, True, n_containing_tweets)
+############################# this part reads all tweets (no retweets) to create pos/neg sets ##########################
+print 'creating pos/neg sets for training set ...'
+#tweets_train = tweets_train[:100]
+tweets_train = remove_intersection_from_training_set(tweets_train, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
+neg_train_labs = [t.lower() for t in neg_train_labs]
+neg_train_labs = [' '.join(t.split()) for t in neg_train_labs]
+positives, negatives, n_containing_tweets, phrase_symbol_dict = funcs_worry.find_pos_neg_tweets(neg_train_labs, tweets_train)
+neg_train_labs_symbolised = phrase_symbol_dict.values()
+my_util.write_csv_file(home_dir + save_dir + 'n_neg_phrases_used', False, True, n_containing_tweets)
 #save (write) pos/neg tweets in a file!
-#my_util.write_csv_file(home_dir + save_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
-#my_util.write_csv_file(home_dir + save_dir + collection_name_train, False, True, [[t] for t in positives])
-#print 'finished creating pos/neg sets!'
+my_util.write_csv_file(home_dir + save_dir + 'not_' + collection_name_train, False, True, [[t] for t in negatives])
+my_util.write_csv_file(home_dir + save_dir + collection_name_train, False, True, [[t] for t in positives])
+print 'finished creating pos/neg sets!'
+########################################################################################################################
 
-positives = my_util.read_csv_file(home_dir + source_dir + 'worried', False, True)
-negatives = my_util.read_csv_file(home_dir + source_dir + 'not_worried', False, True)
-positives = [t[0] for t in positives]
-negatives = [t[0] for t in negatives]
+######################## this part reads the already created and saved  pos/neg sets from csv file #####################
+# positives = my_util.read_csv_file(home_dir + source_dir + 'worried', False, True)
+# negatives = my_util.read_csv_file(home_dir + source_dir + 'not_worried', False, True)
+# positives = [t[0] for t in positives]
+# negatives = [t[0] for t in negatives]
+########################################################################################################################
 
 positives = remove_intersection_from_training_set(positives, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
 negatives = remove_intersection_from_training_set(negatives, tweets_test_not_worry + tweets_test_worry + tweets_test_others)
 
-positives = positives[:10000]
-negatives = negatives[:10000]
+# positives = positives[:10000]
+# negatives = negatives[:10000]
+positives = positives[:len(negatives)]
 
 positives_test = tweets_test_worry
 negatives_test = tweets_test_not_worry + tweets_test_others
