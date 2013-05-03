@@ -2,7 +2,8 @@ __author__ = 'behzadbehzadan'
 
 """
 In this version, a binary classification applies on 'worried' (positive) and 'not worried' (negative) training sets.
-The test set, has data related to british gas tweets.
+The test set is the 200 hand picked tweets!
+The ENTIRE training set is used! --> line 156 ( negatives = [t[0] for t in negatives] ) removed!
 """
 
 import random
@@ -15,7 +16,7 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_14/'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_15/'
 collection_name_train = 'worried'
 labels_features_file_name = 'labels_features'
 tweet_texts_file_name = 'all_tweet_texts'
@@ -24,7 +25,7 @@ table_file_name = 'table'
 # These phrases must not exist - and, hence, excluded - from the feature space.
 #neg_train_labs = funcs_worry.get_negative_phrases(collection_name_train)
 use_of_neg_phrases = my_util.read_csv_file(home_dir + source_dir + 'use_of_neg_phrases_sorted', False, True)
-neg_train_labs = [p for p, n in use_of_neg_phrases if int(n) > 0]
+neg_train_labs = [p for p, n in use_of_neg_phrases if int(n) > 200]
 pos_train_labs = [collection_name_train]# + ['worry'] + ['worries'] + ['worrie'] + ['worr']
 
 # All of the positive tweets for test set are extracted from the file 'heating'.

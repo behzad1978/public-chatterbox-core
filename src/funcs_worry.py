@@ -651,6 +651,7 @@ def find_pos_neg_tweets(neg_phrases, tweets):
     #select tweets containing negative signs and put them in the negative set.
     positives = tweets[:]
     negatives = []
+
     for s in neg_phrases:
         negative_s = [t for t in positives if s in t]
         negative_s_symbolised = [t.replace(s, phrase_symbol_dict[s], 1) for t in negative_s]
