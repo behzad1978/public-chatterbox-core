@@ -633,36 +633,28 @@ def get_negative_phrases(keyword):
 
     return neg_phrases
 
-def symbolise_phrases(phrase_list):
-    global phrase_symbol_dict
-    global symbol
-    for phrase in phrase_list:
-        #print phrase
-        phrase_symbolised = ' '.join([symbol+tok for tok in phrase.split()])
-        #print phrase_symbolised
-        phrase_symbol_dict[phrase] = phrase_symbolised
-    return phrase_symbol_dict
-
 def find_pos_neg_tweets(neg_phrases, tweets):
 
-    phrase_symbol_dict = symbolise_phrases(neg_phrases)
+    global symbol
     n_containing_tweets = []
 
-    #select tweets containing negative signs and put them in the negative set.
     positives = tweets[:]
     negatives = []
-
-    for s in neg_phrases:
-        negative_s = [t for t in positives if s in t]
-        negative_s_symbolised = [t.replace(s, phrase_symbol_dict[s], 1) for t in negative_s]
-        negatives = negatives + [t for t in negative_s_symbolised]
-        positives = [t for t in positives if t not in negative_s]
-        n_containing_tweets.append([s, len(negative_s)])
+    #select tweets containing negative signs and put them in the negative set.
+    for phrase in neg_phrases:
+        negative_temp = [t for t in positives if phrase in t]
+        # stick the unique symbol to the beginning of each phrase
+        symbolised_phrase = ' '.join([symbol + tok for tok in phrase.split()])
+        # substitute the symbolised_phrase instead of the phrase itself
+        negative_temp_symbolised = [t.replace(phrase, symbolised_phrase, 1) for t in negative_temp]
+        negatives = negatives + [t for t in negative_temp_symbolised]
+        positives = [t for t in positives if t not in negative_temp]
+        n_containing_tweets.append([phrase, len(negative_temp)])
 
     print 'no. of positives:', len(positives)
     print 'no. of negatives:', len(negatives)
 
-    return positives, negatives, n_containing_tweets, phrase_symbol_dict
+    return positives, negatives, n_containing_tweets
 
 def read_labels_features_from_file(labels_features, tweet_texts, norm_factors, class_labels):
 
@@ -711,3 +703,36 @@ def get_dimension_size(list_of_vectors):
     dimensions = set(dimensions)
 
     return dimensions
+
+def find_double_keywords(keyword, the_list):
+    return_list = []
+    for t in the_list:
+        t = t.split()
+        count = len([x for x in t if x==keyword])
+        if count>=2:
+            t = ' '.join(t)
+            return_list.append([t])
+    return return_list
+
+def remove_intersection_from_the_list(the_list, another_list):
+
+    intersection = [t for t in another_list if t in the_list]
+    the_list = [t for t in the_list if t not in intersection]
+    print 'intersection size between the two lists:', len(intersection)
+    return the_list
+
+def filter_same_turked_tweets(tweets, threshold):
+        # make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
+        tweets = [t.lower() for t in tweets]
+        # remove extra spaces that may exist between words, by first splitting the words and then re-joining them.
+        tweets = [' '.join(t.split()) for t in tweets]
+        clustered_tweets = []#cluster duplicated/similar tweets together
+        while len(tweets) > 0:
+            t = tweets[0]
+            #note: the string must have become lower-case before this stage.
+            duplicates = [s for s in tweets if s == t]
+            clustered_tweets.append([t, len(duplicates)])
+            tweets = [x for x in tweets if x not in duplicates]
+
+        unique_tweets = [t for t, l in clustered_tweets if l >= threshold]
+        return unique_tweets#, clustered_tweets
