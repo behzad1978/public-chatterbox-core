@@ -10,7 +10,9 @@ home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
 save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags/'
 ########################################################################################################################
-remove_retweets = True
+test_on = 'hand_picked_data'
+test_on = 'mech_turk'
+remove_retweets = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = False
 random.seed(7)
@@ -146,19 +148,19 @@ keywords_neg = ['#easy', '#relaxed', '#calm']
 
 ###################################################### read source data ################################################
 hash_tweets = read_hash_tweets_source_data()
-worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk = read_amazon_mech_turk_data()
-tweets_test_worry, tweets_test_not_worry, tweets_test_others = read_hand_picked_data()
+worrieds_mech_turk, not_worrieds_mech_turk, tell_not_worry_mech_turk, nothing_MTurk = read_amazon_mech_turk_data()
+worried_hand_picked, not_worried_hand_picked, nothing_hand_picked = read_hand_picked_data()
 ########################################################################################################################
 
-tweets_with_keywords_pos = {}
-tweets_with_keywords_neg = {}
+tweets_with_hash_keywords_pos = {}
+tweets_with_hash_keywords_neg = {}
 
 for keyword in keywords_pos:
     if '#' in keyword:
         tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
     # if '#' not in keyword:
     #     tweets_with_keyword = find_tweets_with_exact_keyword(hash_tweets, keyword)
-    tweets_with_keywords_pos[keyword] = tweets_with_keyword
+    tweets_with_hash_keywords_pos[keyword] = tweets_with_keyword
     print 'number of tweets containing '+ keyword + ' :', len(tweets_with_keyword)
 
 for keyword in keywords_neg:
@@ -166,7 +168,79 @@ for keyword in keywords_neg:
         tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
     # if '#' not in keyword:
     #     tweets_with_keyword = find_tweets_with_exact_keyword(hash_tweets, keyword)
-    tweets_with_keywords_neg[keyword] = tweets_with_keyword
+    tweets_with_hash_keywords_neg[keyword] = tweets_with_keyword
     print 'number of tweets containing ' + keyword + ' :', len(tweets_with_keyword)
 
-remove_intersections(tweets_with_keywords_pos, tweets_with_keywords_neg)
+remove_intersections(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg)
+
+all_hash_tweets_pos = []
+for keyword, tweets in tweets_with_hash_keywords_pos.items():
+    all_hash_tweets_pos.extend(tweets)
+
+hash_tweets_train_labs_pos = tweets_with_hash_keywords_pos.keys()
+
+all_hash_tweets_neg = []
+for keyword, tweets in tweets_with_hash_keywords_pos.items():
+    all_hash_tweets_pos.extend(tweets)
+
+hash_tweets_train_labs_neg = tweets_with_hash_keywords_neg.keys()
+
+hand_picked_pos = worried_hand_picked
+hand_picked_neg = not_worried_hand_picked, nothing_hand_picked
+
+mech_turk_pos = worrieds_mech_turk + tell_not_worry_mech_turk
+mech_turk_neg = not_worrieds_mech_turk + nothing_MTurk
+
+print 'creating feature vectors...'
+
+features_dict = {}
+features_count_dict = {}
+#the very first index is always 1.
+if new_normalisation_flag:
+    max_index = 0
+else:
+    max_index = 1
+
+# since there is no intersection between tweets containing keywords we can send the aggregated tweets int o the function below:
+hash_tweets_feature_vects_pos, hash_tweets_texts_pos, max_index, hash_tweets_norm_factors_pos = \
+    funcs_worry.get_sparse_feature_vector_worry(
+    all_hash_tweets_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+    remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_pos, random)
+
+hash_tweets_feature_vects_neg, hash_tweets_texts_neg, max_index, hash_tweets_norm_factors_neg = \
+    funcs_worry.get_sparse_feature_vector_worry(
+    all_hash_tweets_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+    remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_neg, random)
+
+
+funcs_worry.write_features_count_dict_to_csv(home_dir + save_dir + 'features_count_dict_training')
+funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict, -1,
+                                            home_dir + save_dir + 'features_freq_training')
+
+if test_on == 'hand_picked_data':
+
+    hand_picked_feature_vects_pos, hand_picked_texts_pos, max_index, hand_picked_norm_factors_pos = \
+        funcs_worry.get_sparse_feature_vector_worry(
+            hand_picked_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+
+    hand_picked_feature_vects_neg, hand_picked_texts_neg, max_index, hand_picked_norm_factors_neg = \
+        funcs_worry.get_sparse_feature_vector_worry(
+            hand_picked_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+
+
+            
+if test_on == 'mech_turk':
+
+    mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
+        funcs_worry.get_sparse_feature_vector_worry(
+            mech_turk_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+
+    mech_turk_feature_vects_neg, mech_turk_texts_neg, max_index, mech_turk_norm_factors_neg = \
+        funcs_worry.get_sparse_feature_vector_worry(
+            mech_turk_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+
+funcs_worry.write_features_dict_to_csv(features_dict, home_dir + save_dir + 'features_dict')

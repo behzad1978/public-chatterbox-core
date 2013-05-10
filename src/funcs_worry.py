@@ -277,6 +277,16 @@ def get_sparse_feature_vector_worry(tweet_list, features_dict, features_count_di
 
     return feature_vectors, tweet_texts, max_index, normal_factors
 
+def write_features_dict_to_csv(features_dict, filename):
+    #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
+    feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
+    my_util.write_csv_file(filename, True, True, feature_list)
+
+def write_features_count_dict_to_csv(features_count_dict, filename):
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+    my_util.write_csv_file(filename, False, True, feature_count_list)
+
 def write_features_and_freqs_to_csv(features_dict, features_count_dict, thresh, filename):
     feature_freq_list = []
     for f, a in features_dict.iteritems():
