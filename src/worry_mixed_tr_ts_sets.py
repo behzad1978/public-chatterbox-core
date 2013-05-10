@@ -15,14 +15,13 @@ from operator import itemgetter
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_mixed_sets/worried_vs_MTurk/exp_2/'
-labels_features_file_name = 'labels_features'
-tweet_texts_file_name = 'all_tweet_texts'
-table_file_name = 'table'
-#test_set_type = 'hand_picked'
-test_set_type = 'MTurk'
-training_set_type = 'worried'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_mixed_sets/worried_and_MTurk_vs_handPicked/test/'
+
+test_set_type = 'hand_picked'
+#test_set_type = 'MTurk'
+#training_set_type = 'worried'
 #training_set_type = 'MTurk'
+training_set_type = 'worried_and_MTurk'
 ########################################################################################################################
 remove_retweets = True
 use_qr_to_remove_dups = False
@@ -53,21 +52,12 @@ balance_sets = True
 use_even_test_sets = False
 ########################################################################################################################
 
-labels_pos = []
-labels_neg = []
-labels_oth = []
-all_labels = []
-feature_vects_pos = []
-feature_vects_neg = []
-feature_vects_oth = []
-all_feature_vects = []
-tweet_texts_pos = []
-tweet_texts_neg = []
-tweet_texts_oth = []
-all_texts = []
-norm_factors_pos = []
-norm_factors_neg = []
-norm_factors_oth = []
+#the very first index is always 1.
+if new_normalisation_flag:
+    max_index = 0
+else:
+    max_index = 1
+
 
 # {'feature' : feature_address} --> feature is an ngrmam, address is a number referring to the ngram.
 # when using svm, an address represents a dimension on the input-space. So it is important to keep the address
@@ -79,47 +69,45 @@ features_dict_reverse = dict()
 features_count_dict = dict()
 # whenever a new ngram is created --> max_index++ --> the ngram is stored in features_dict[max_index]
 
+features_dict_training_pos = dict()
+features_count_dict_training_pos = dict()
 
-###################################################### read source data ################################################
-print "reading 'worried' source file ..."
-worried_source_data_noRT = my_util.read_csv_file(home_dir + source_dir + 'source_worried_noDup', False, True)
-worried_source_data = [t[0] for t in worried_source_data_noRT]
-worried_source_data = [t.lower() for t in worried_source_data]
-# remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
-# for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
-worried_source_data = [' '.join(t.split()) for t in worried_source_data]
-print 'training set size:', len(worried_source_data)
+features_dict_training = dict()
+features_count_dict_training = dict()
+###################################################### functions #######################################################
+def read_worried_data():
 
-print 'reading Amazon MTurk source files ...'
-tweets_MTurk = my_util.read_csv_file(home_dir + source_dir + 'AmazonMTurk', False, True)
-header = tweets_MTurk[0]
-worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'worry']
-not_worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'notworry']
-tell_not_worry_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'tellnotworry']
-nothing_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'nothing']
-# select those tweets that turkers agreed when annotating --> thresshol==2 means at least two annotators agreed.
-worrieds_MTurk = funcs_worry.filter_same_turked_tweets(worrieds_MTurk, 2)
-not_worrieds_MTurk = funcs_worry.filter_same_turked_tweets(not_worrieds_MTurk, 2)
-tell_not_worry_MTurk = funcs_worry.filter_same_turked_tweets(tell_not_worry_MTurk, 2)
-nothing_MTurk = funcs_worry.filter_same_turked_tweets(nothing_MTurk, 2)
-print 'Amazon MTurk data size:', len(worrieds_MTurk) + len(not_worrieds_MTurk) + len(tell_not_worry_MTurk) + len(nothing_MTurk)
-########################################################################################################################
+    print "reading 'worried' source file ..."
+    worried_source_data_noRT = my_util.read_csv_file(home_dir + source_dir + 'source_worried_noDup', False, True)
+    #worried_source_data = worried_source_data_noRT[:100]
+    worried_source_data = [t[0] for t in worried_source_data_noRT]
+    worried_source_data = [t.lower() for t in worried_source_data]
+    # remove extra spaces that may exist between words. Is good for when finding not worried tweets, as we look
+    # for certain strings like 'aint worried' (don't care about one or double space between 'aint' & 'worried')
+    worried_source_data = [' '.join(t.split()) for t in worried_source_data]
+    print 'training set size:', len(worried_source_data)
 
-if test_set_type == 'MTurk':
-    positives_test = worrieds_MTurk + tell_not_worry_MTurk
-    negatives_test = not_worrieds_MTurk + nothing_MTurk
+    return worried_source_data
 
-    positives_test = random.sample(positives_test, len(negatives_test))
+def read_amazon_mech_turk_data():
 
-    #save (write) pos/neg tweets in a file!
-    my_util.write_csv_file(home_dir + save_dir + 'ts_MTurk_neg', False, True, [[t] for t in negatives_test])
-    my_util.write_csv_file(home_dir + save_dir + 'ts_MTurk_pos', False, True, [[t] for t in positives_test])
+    print 'reading Amazon MTurk source files ...'
+    tweets_MTurk = my_util.read_csv_file(home_dir + source_dir + 'AmazonMTurk', False, True)
+    header = tweets_MTurk[0]
+    worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'worry']
+    not_worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'notworry']
+    tell_not_worry_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'tellnotworry']
+    nothing_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'nothing']
+    # select those tweets that turkers agreed when annotating --> thresshol==2 means at least two annotators agreed.
+    worrieds_MTurk = funcs_worry.filter_same_turked_tweets(worrieds_MTurk, 2)
+    not_worrieds_MTurk = funcs_worry.filter_same_turked_tweets(not_worrieds_MTurk, 2)
+    tell_not_worry_MTurk = funcs_worry.filter_same_turked_tweets(tell_not_worry_MTurk, 2)
+    nothing_MTurk = funcs_worry.filter_same_turked_tweets(nothing_MTurk, 2)
+    print 'Amazon MTurk data size:', len(worrieds_MTurk) + len(not_worrieds_MTurk) + len(tell_not_worry_MTurk) + len(nothing_MTurk)
 
-    pos_train_labs_test = []
-    neg_train_labs_test = []
+    return worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk
 
-
-if test_set_type == 'hand_picked':
+def read_hand_picked_data():
 
     print 'reading test set source files ...'
     tweets_test_worry = my_util.read_csv_file(home_dir + source_dir + 'test_set_worry', False, True)
@@ -140,14 +128,11 @@ if test_set_type == 'hand_picked':
     tweets_test_others = [' '.join(t.split()) for t in tweets_test_others]
     print 'test_set_others size:', len(tweets_test_others)
 
-    positives_test = tweets_test_worry
-    negatives_test = tweets_test_not_worry + tweets_test_others
+    return tweets_test_worry, tweets_test_not_worry, tweets_test_others
 
-    pos_train_labs_test = []
-    neg_train_labs_test = []
+def create_pos_neg_sets_for_worried_data(worried_source_data):
 
-if training_set_type == 'worried':
-    ############################# this part reads all tweets (no retweets) to create pos/neg sets ######################
+    #reads all tweets (no retweets) to create pos/neg sets
     print "creating pos/neg sets for 'worried' data ..."
 
     # the train_lab is the list of key-phrases that are used to detect negative tweets from positive tweets.
@@ -160,7 +145,6 @@ if training_set_type == 'worried':
     neg_train_labs = [p for p, n in neg_train_labs if int(n) > 0]
     neg_train_labs = [t.lower() for t in neg_train_labs]
     neg_train_labs = [' '.join(t.split()) for t in neg_train_labs]
-    pos_train_labs = ['worried']
 
     positives, negatives, n_containing_tweets = funcs_worry.find_pos_neg_tweets(neg_train_labs, worried_source_data)
 
@@ -169,13 +153,82 @@ if training_set_type == 'worried':
     negatives_with_double_keyword = funcs_worry.find_double_keywords('worried', negatives)
     print 'negatives_with_double_keyword:', len(negatives_with_double_keyword)
     negatives = funcs_worry.remove_intersection_from_the_list(negatives, negatives_with_double_keyword)
-    my_util.write_csv_file(home_dir + save_dir + 'n_neg_phrases_used', False, True, n_containing_tweets)
+    print 'finished creating pos/neg sets!'
+
+    return positives, negatives, n_containing_tweets, neg_train_labs
+
+def create_feature_vectors_training(positives, negatives, pos_train_labs, neg_train_labs):
+
+    global max_index
+    print 'creating feature vectors for training set...'
+
+    feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
+        positives, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs, random)
+
+    features_dict_training_pos = copy.deepcopy(features_dict)
+    features_count_dict_training_pos = copy.deepcopy(features_count_dict)
+
+    feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
+        negatives, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs, random)
+
+    features_dict_training = copy.deepcopy(features_dict)
+    features_count_dict_training = copy.deepcopy(features_count_dict)
+
+    print 'training set feature vectors created!', 'No of distinct features:', len(features_dict)
+
+    return feature_vects_pos, tweet_texts_pos, norm_factors_pos, feature_vects_neg, tweet_texts_neg, norm_factors_neg
+
+def create_feature_vectors_test(positives_test, negatives_test, pos_train_labs_test, neg_train_labs_test):
+
+    global max_index
+    feature_vects_pos_test, tweet_texts_pos_test, max_index, norm_factors_pos_test = funcs_worry.get_sparse_feature_vector_worry(
+        positives_test, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams,
+        new_normalisation_flag, pos_train_labs_test, random)
+
+    feature_vects_neg_test, tweet_texts_neg_test, max_index, norm_factors_neg_test = funcs_worry.get_sparse_feature_vector_worry(
+        negatives_test, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams,
+        new_normalisation_flag, neg_train_labs_test, random)
+
+    return feature_vects_pos_test, tweet_texts_pos_test, norm_factors_pos_test, feature_vects_neg_test, tweet_texts_neg_test, norm_factors_neg_test
+
+
+def save_stuff():
+
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list_training_pos = [list(z) for z in zip(features_count_dict_training_pos.keys(), features_count_dict_training_pos.values())]
+    my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training_pos', False, True, feature_count_list_training_pos)
+    funcs_worry.write_features_and_freqs_to_csv(features_dict_training_pos, feature_count_list_training_pos, -1, home_dir + save_dir + 'features_freq_training_pos')
+
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list_training = [list(z) for z in zip(features_count_dict_training.keys(), features_count_dict_training.values())]
+    my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training', False, True, feature_count_list_training)
+    funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict, -1, home_dir + save_dir + 'features_freq_training')
+
+    features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
+    #create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
+    feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
+    my_util.write_csv_file(home_dir + save_dir + 'features_dict', True, True, feature_list)
+    #create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
+    feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
+    my_util.write_csv_file(home_dir + save_dir + 'features_count_dict', False, True, feature_count_list)
+    #create a list from feature_dict in the form of [ [address, 'feature'], ...] to save in a csv file (tab deliminated)
+    feature_reverse_list = [list(z) for z in zip(features_dict_reverse.keys(), features_dict_reverse.values())]
+    my_util.write_csv_file(home_dir + save_dir + 'features_dict_reverse', True, True, feature_reverse_list)
+
+
+def get_worried_pos_neg_sets(worried_source_data):
+
+    positives, negatives, n_containing_tweets, neg_train_labs = create_pos_neg_sets_for_worried_data(worried_source_data)
+
+    pos_train_labs = ['worried']
 
     # # find all positive tweets that contain 'worry' phrases:
     # positives_worry = [t for t in positives if 'worry' in t]
     # positives_without_worry = [x for x in positives if x not in positives_worry]
     # print "number of positive 'worried' tweets containing 'worry':", len(positives_worry)
     # positives = positives_worry + random.sample(positives_without_worry, 10000-len(positives_worry))
+    # pos_train_labs.extend(['worry'])
+    # negatives = random.sample(negatives, 10000)
 
     positives = random.sample(positives, 10000)
     negatives = random.sample(negatives, 10000)
@@ -184,11 +237,12 @@ if training_set_type == 'worried':
     #save (write) pos/neg tweets in a file!
     my_util.write_csv_file(home_dir + save_dir + 'tr_worried_neg', False, True, [[t] for t in negatives])
     my_util.write_csv_file(home_dir + save_dir + 'tr_worried_pos', False, True, [[t] for t in positives])
+    my_util.write_csv_file(home_dir + save_dir + 'n_neg_phrases_used', False, True, n_containing_tweets)
 
-    print 'finished creating pos/neg sets!'
-    ####################################################################################################################
+    return positives, negatives, pos_train_labs, neg_train_labs
 
-if training_set_type == 'Mturk':
+def get_MTurk_pos_neg_sets(worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk):
+
     positives = worrieds_MTurk + tell_not_worry_MTurk
     negatives = not_worrieds_MTurk + nothing_MTurk
 
@@ -199,56 +253,119 @@ if training_set_type == 'Mturk':
     pos_train_labs = []
     neg_train_labs = []
 
+    return positives, negatives, pos_train_labs, neg_train_labs
+
+def get_training_sets(worried_source_data, worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk):
+
+    if training_set_type == 'worried':
+
+        positives, negatives, pos_train_labs, neg_train_labs = get_worried_pos_neg_sets(worried_source_data)
+
+    if training_set_type == 'MTurk':
+
+        positives, negatives, pos_train_labs, neg_train_labs = \
+            get_MTurk_pos_neg_sets(worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk)
+
+    if training_set_type == 'worried_and_MTurk':
+
+        positives_worried, negatives_worried, pos_train_labs_worried, neg_train_labs_worried = \
+            get_worried_pos_neg_sets(worried_source_data)
+
+        positives_MTurk, negatives_MTurk, pos_train_labs_MTurk, neg_train_labs_MTurk = \
+            get_MTurk_pos_neg_sets(worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk)
+
+        positives = [positives_worried, positives_MTurk]
+        negatives = [negatives_worried, negatives_MTurk]
+
+        pos_train_labs = (pos_train_labs_worried, pos_train_labs_MTurk)
+        neg_train_labs = (neg_train_labs_worried, neg_train_labs_MTurk)
+
+        #save (write) pos/neg tweets in a file!
+        my_util.write_csv_file(home_dir + save_dir + 'tr_worried_and_MTurk_neg', False, True, [[t] for t in positives_worried + positives_MTurk])
+        my_util.write_csv_file(home_dir + save_dir + 'tr_worried_and_MTurk_pos', False, True, [[t] for t in negatives_worried + negatives_MTurk])
+
+    return positives, negatives, pos_train_labs, neg_train_labs
+
+def get_test_sets(worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk):
+
+    if test_set_type == 'MTurk':
+
+        positives = worrieds_MTurk + tell_not_worry_MTurk
+        negatives = not_worrieds_MTurk + nothing_MTurk
+
+        positives = random.sample(positives, len(negatives))
+
+        #save (write) pos/neg tweets in a file!
+        my_util.write_csv_file(home_dir + save_dir + 'ts_MTurk_neg', False, True, [[t] for t in negatives])
+        my_util.write_csv_file(home_dir + save_dir + 'ts_MTurk_pos', False, True, [[t] for t in positives])
+
+    if test_set_type == 'hand_picked':
+
+        tweets_test_worry, tweets_test_not_worry, tweets_test_others = read_hand_picked_data()
+
+        positives = tweets_test_worry
+        negatives = tweets_test_not_worry + tweets_test_others
+
+    return positives, negatives
 
 
-positives = funcs_worry.remove_intersection_from_the_list(positives, positives_test + negatives_test)
-negatives = funcs_worry.remove_intersection_from_the_list(negatives, positives_test + negatives_test)
+###################################################### read source data ################################################
+worried_source_data = read_worried_data()
+worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk = read_amazon_mech_turk_data()
+########################################################################################################################
 
-############################################# this part creates all the feature vectors ################################
-print 'creating feature vectors...'
+###################################################### get training data ###############################################
+positives_train, negatives_train, train_labs_pos, train_labs_neg = \
+    get_training_sets(worried_source_data, worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk)
+########################################################################################################################
 
-#the very first index is always 1.
-if new_normalisation_flag:
-    max_index = 0
+###################################################### get test data ###################################################
+positives_test, negatives_test = \
+    get_test_sets(worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk)
+########################################################################################################################
+
+#################################### remove intersections between training and test sets ###############################
+if training_set_type == 'worried_and_MTurk':
+    positives_train[0] = funcs_worry.remove_intersection_from_the_list(positives_train[0], positives_test + negatives_test)
+    positives_train[1] = funcs_worry.remove_intersection_from_the_list(positives_train[1], positives_test + negatives_test)
+    negatives_train[0] = funcs_worry.remove_intersection_from_the_list(negatives_train[0], positives_test + negatives_test)
+    negatives_train[1] = funcs_worry.remove_intersection_from_the_list(negatives_train[1], positives_test + negatives_test)
 else:
-    max_index = 1
+    positives_train = funcs_worry.remove_intersection_from_the_list(positives_train, positives_test + negatives_test)
+    negatives_train = funcs_worry.remove_intersection_from_the_list(negatives_train, positives_test + negatives_test)
+########################################################################################################################
 
-feature_vects_pos, tweet_texts_pos, max_index, norm_factors_pos = funcs_worry.get_sparse_feature_vector_worry(
-    positives, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs, random)
-#create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
-feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training_pos', False, True, feature_count_list)
-funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict, -1, home_dir + save_dir + 'features_freq_training_pos')
+###################################################### create feature vectors ##########################################
+if training_set_type == 'worried_and_MTurk':
 
-feature_vects_neg, tweet_texts_neg, max_index, norm_factors_neg = funcs_worry.get_sparse_feature_vector_worry(
-    negatives, features_dict, features_count_dict, max_index, min_ngram, max_ngram, remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs, random)
-#create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
-feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_training', False, True, feature_count_list)
-funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict, -1, home_dir + save_dir + 'features_freq_training')
+    feature_vects_pos_worried, tweet_texts_pos_worried, norm_factors_pos_worried, \
+    feature_vects_neg_worried, tweet_texts_neg_worried, norm_factors_neg_worried = \
+        create_feature_vectors_training(positives_train[0], negatives_train[0], train_labs_pos[0], train_labs_neg[0])
 
-feature_vects_pos_test, tweet_texts_pos_test, max_index, norm_factors_pos_test = funcs_worry.get_sparse_feature_vector_worry(
-    positives_test, features_dict, features_count_dict, max_index, min_ngram, max_ngram,  remove_stpwds_for_unigrams, new_normalisation_flag, pos_train_labs_test, random)
+    feature_vects_pos_MTurk, tweet_texts_pos_MTurk, norm_factors_pos_MTurk,\
+    feature_vects_neg_MTurk, tweet_texts_neg_MTurk, norm_factors_neg_MTurk = \
+        create_feature_vectors_training(positives_train[1], negatives_train[1], train_labs_pos[1], train_labs_neg[1])
 
-feature_vects_neg_test, tweet_texts_neg_test, max_index, norm_factors_neg_test = funcs_worry.get_sparse_feature_vector_worry(
-    negatives_test, features_dict, features_count_dict, max_index, min_ngram, max_ngram,  remove_stpwds_for_unigrams, new_normalisation_flag, neg_train_labs_test, random)
+    feature_vects_pos = feature_vects_pos_worried + feature_vects_pos_MTurk
+    tweet_texts_pos = tweet_texts_pos_worried + tweet_texts_pos_MTurk
+    norm_factors_pos = norm_factors_pos_worried + norm_factors_pos_MTurk
 
-n_distinct_features = len(features_dict)
+    feature_vects_neg = feature_vects_neg_worried + feature_vects_neg_MTurk
+    tweet_texts_neg = tweet_texts_neg_worried + tweet_texts_neg_MTurk
+    norm_factors_neg = norm_factors_neg_worried + norm_factors_neg_MTurk
 
-print 'feature vectors created!', 'No of distinct features:', len(features_dict)
-####################################################################################################################
+else:
 
-features_dict_reverse = funcs_worry.get_features_dict_reverse(features_dict)
+    feature_vects_pos, tweet_texts_pos, norm_factors_pos, feature_vects_neg, tweet_texts_neg, norm_factors_neg = \
+    create_feature_vectors_training(positives_train, negatives_train, train_labs_pos, train_labs_neg)
 
-#create a list from feature_dict in the form of [ ['feature', address], ...] to save in a csv file (tab deliminated)
-feature_list = [list(z) for z in zip(features_dict.keys(), features_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + 'features_dict', True, True, feature_list)
-#create a list from feature_count_dict in the form of [ [address, freq], ...] to save in a csv file
-feature_count_list = [list(z) for z in zip(features_count_dict.keys(), features_count_dict.values())]
-my_util.write_csv_file(home_dir + save_dir + 'features_count_dict_all', False, True, feature_count_list)
-#create a list from feature_dict in the form of [ [address, 'feature'], ...] to save in a csv file (tab deliminated)
-feature_reverse_list = [list(z) for z in zip(features_dict_reverse.keys(), features_dict_reverse.values())]
-my_util.write_csv_file(home_dir + save_dir + 'features_dict_reverse', True, True, feature_reverse_list)
+feature_vects_pos_test, tweet_texts_pos_test, norm_factors_pos_test, feature_vects_neg_test, tweet_texts_neg_test, norm_factors_neg_test = \
+create_feature_vectors_test(positives_test, negatives_test, [], [])
+########################################################################################################################
+
+############################################################# save data ################################################
+save_stuff()
+########################################################################################################################
 
 results = []
 header = ['strip_thresh', 'tr_size_pos', 'tr_size_neg', 'ts_size_pos', 'ts_size_neg',
@@ -349,11 +466,13 @@ for strip_thresh in strip_thresholds:
     my_util.write_csv_file(home_dir+save_dir+'result' + '_ST'+str(strip_thresh), False, True, prediction_result)
 
     statistics = []
-    statistics.append(['ngram', 'n_distinct_features', 'svm_params', 'train_labs_size_pos', 'train_labs_size_neg',
+    statistics.append(['ngram', 'n_distinct_features', 'svm_params',
+                       'train_labs_size_pos', 'train_labs_size_neg',
                        'train_set_size_pos', 'train_set_size_neg', 'test_set_size_pos', 'test_set_size_neg',
                        'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg'])
-    statistics.append([  max_ngram,    n_distinct_features,   svm_params,    len(pos_train_labs),    len(neg_train_labs),
-                       len(positives), len(negatives), len(positives_test), len(negatives_test),
+    statistics.append([max_ngram, len(features_dict), svm_params,
+                       len(train_labs_pos), len(train_labs_neg),
+                       len(feature_vects_pos), len(feature_vects_neg), len(feature_vects_pos_test), len(feature_vects_neg_test),
                        accuracy, precisions['pos'], precisions['neg'], recalls['pos'], recalls['neg']])
     my_util.write_csv_file(home_dir + save_dir + 'statistics' + '_ST' + str(strip_thresh), False, True, statistics)
 
