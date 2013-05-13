@@ -240,7 +240,8 @@ def get_ngrams_worry(tweet, features_dict, features_count_dict, max_index, m, n,
             # Divide all elements of the vector by the number of traversed features.
             # This is more correct than the division by len(tokens), as the no. of ngrams (addressed in a vector) is not
             # necessarily equal to the number of features.
-            vector = {a : float(c)/n_of_features for a, c in vector.iteritems()}
+            #vector = {a : float(c)/n_of_features for a, c in vector.iteritems()}
+            vector = dict( [ (a, float(c)/n_of_features) for a, c in vector.iteritems() ] )
             norm_factor = n_of_features
 
     return vector, max_index, norm_factor
@@ -453,11 +454,15 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, p_val, class_labels):
     # recalls = { l : round(float(true_counts[l]) / n_samples[l], 2) if
     #            n_samples[l] <> 0 else 0 for l in class_labels.keys() }
 
-    precisions = dict([ (l , round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2)) if
-                  (true_counts[l] + false_counts[l]) <> 0 else 0 for l in class_labels.keys() ])
+    precisions = dict([ (l, round(float(true_counts[l]) / (true_counts[l] + false_counts[l]), 2)) if
+                  (true_counts[l] + false_counts[l]) <> 0 else (l, 0) for l in class_labels.keys() ])
 
-    recalls = dict( [(l , round(float(true_counts[l]) / n_samples[l], 2)) if
-               n_samples[l] <> 0 else 0 for l in class_labels.keys() ])
+    recalls = dict( [(l, round(float(true_counts[l]) / n_samples[l], 2)) if
+               n_samples[l] <> 0 else (l, 0) for l in class_labels.keys() ])
+
+    print 'accuracy', accuracy
+    print 'precisions', precisions
+    print 'recalls', recalls
 
     return prediction_result, accuracy, precisions, recalls
 
@@ -746,3 +751,49 @@ def filter_same_turked_tweets(tweets, threshold):
 
         unique_tweets = [t for t, l in clustered_tweets if l >= threshold]
         return unique_tweets#, clustered_tweets
+
+def read_amazon_mech_turk_data(home_dir, source_dir, threshold):
+
+    print 'reading Amazon MTurk source files ...'
+    tweets_MTurk = my_util.read_csv_file(home_dir + source_dir + 'AmazonMTurk', False, True)
+    header = tweets_MTurk[0]
+    #tweets_MTurk = tweets_MTurk[:100]
+    worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'worry']
+    not_worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'notworry']
+    tell_not_worry_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'tellnotworry']
+    nothing_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'nothing']
+    # select those tweets that turkers agreed when annotating --> thresshol==2 means at least two annotators agreed.
+    worrieds_MTurk = filter_same_turked_tweets(worrieds_MTurk, threshold)
+    not_worrieds_MTurk = filter_same_turked_tweets(not_worrieds_MTurk, threshold)
+    tell_not_worry_MTurk = filter_same_turked_tweets(tell_not_worry_MTurk, threshold)
+    nothing_MTurk = filter_same_turked_tweets(nothing_MTurk, threshold)
+    print "Amazon MTurk data size:", len(worrieds_MTurk)+len(not_worrieds_MTurk)+len(tell_not_worry_MTurk)+len(nothing_MTurk)
+    print "'worried':", len(worrieds_MTurk)
+    print "'not_worrieds':", len(not_worrieds_MTurk)
+    print "'tell_not_worry':", len(tell_not_worry_MTurk)
+    print "'nothing_worry':", len(nothing_MTurk)
+
+    return worrieds_MTurk, not_worrieds_MTurk, tell_not_worry_MTurk, nothing_MTurk
+
+def read_hand_picked_data(home_dir, source_dir):
+
+    print 'reading test set source files ...'
+    tweets_test_worry = my_util.read_csv_file(home_dir + source_dir + 'test_set_worry', False, True)
+    tweets_test_worry = [t[0] for t in tweets_test_worry]
+    tweets_test_worry = [t.lower() for t in tweets_test_worry]
+    tweets_test_worry = [' '.join(t.split()) for t in tweets_test_worry]
+    print 'test_set_worry size:', len(tweets_test_worry)
+
+    tweets_test_not_worry = my_util.read_csv_file(home_dir + source_dir + 'test_set_not_worry', False, True)
+    tweets_test_not_worry = [t[0] for t in tweets_test_not_worry]
+    tweets_test_not_worry = [t.lower() for t in tweets_test_not_worry]
+    tweets_test_not_worry = [' '.join(t.split()) for t in tweets_test_not_worry]
+    print 'test_set_not_worry size:', len(tweets_test_not_worry)
+
+    tweets_test_others = my_util.read_csv_file(home_dir + source_dir + 'test_set_others', False, True)
+    tweets_test_others = [t[0] for t in tweets_test_others]
+    tweets_test_others = [t.lower() for t in tweets_test_others]
+    tweets_test_others = [' '.join(t.split()) for t in tweets_test_others]
+    print 'test_set_others size:', len(tweets_test_others)
+
+    return tweets_test_worry, tweets_test_not_worry, tweets_test_others
