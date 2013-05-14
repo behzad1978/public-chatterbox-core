@@ -460,11 +460,15 @@ def calc_prediction_stats_2(y_test, tweet_texts, p_label, p_val, class_labels):
     recalls = dict( [(l, round(float(true_counts[l]) / n_samples[l], 2)) if
                n_samples[l] <> 0 else (l, 0) for l in class_labels.keys() ])
 
+    f1_scores = dict([ (l, round(2 * precisions[l] * recalls[l] / (precisions[l] + recalls[l]), 2)) if
+                           (precisions[l] + recalls[l]) <> 0 else (l, 0) for l in class_labels.keys() ])
+
     print 'accuracy', accuracy
     print 'precisions', precisions
     print 'recalls', recalls
+    print f1_scores
 
-    return prediction_result, accuracy, precisions, recalls
+    return prediction_result, accuracy, precisions, recalls, f1_scores
 
 
 def remove_duplicate_tweets(tweets, use_quick_ratio, thresh):
