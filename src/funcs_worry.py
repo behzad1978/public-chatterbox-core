@@ -623,7 +623,10 @@ def get_params(svm_type, kernel_type, cost, nu, balance_sets, labels, training_s
                 weights = ' -w' + str(v) + ' ' + str(w)
                 first_iter = False
             else:
-                w = round(float(training_sizes[k0])/(training_sizes[k]), 2)
+                if training_sizes[k] <> 0:
+                    w = round(float(training_sizes[k0])/(training_sizes[k]), 2)
+                else:
+                    w = 1
                 weights = weights + ' -w' + str(v) + ' ' + str(w)
 
     param = param + weights
