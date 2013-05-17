@@ -58,7 +58,7 @@ def read_hash_tweets_source_data():
                                [[t] for t in tweet_hashtags_noDup])
     else:
         tweet_hashtags_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_noDup', False, True)
-        tweet_hashtags_noDup = [t[0] for t in tweet_hashtags_noDup[1:]]
+        tweet_hashtags_noDup = [t[0] for t in tweet_hashtags_noDup]
         #tweet_hashtags_noDup = tweet_hashtags_noDup[:100]
 
     return tweet_hashtags_noDup
@@ -75,7 +75,9 @@ def find_tweets_with_combined_keywords(tweets, combined_keyword):
     tweets_with_the_keyword = []
     for tweet in tweets:
         # some keywords like 'help' might be followed by punctuation chars, like: 'help!'
+        # put a space between non-punc-chars and punc-chars
         tweet_separated_puncs = re.sub(r"([^'\".,;:/?\!@#£$%^&*()_\-=+`~])(['\".,;:/?\!@#£$%^&*()_\-=+`~])", r"\1 \2", tweet)
+        # put a space between punc-chars (EXCEPT #) and non-punc-chars --> note: #anxious would stay as it is!
         tweet_separated_puncs = re.sub(r"(['\".,;:/?\!£$%^&*()_\-=+`~])([^'\".,;:/?\!@#£$%^&*()_\-=+`~#@])", r"\1 \2", tweet_separated_puncs)
         # better to split the text --> the keyword 'eek' also exists in 'week'.
         if all(k in tweet_separated_puncs.split() for k in combined_keyword):
@@ -117,7 +119,7 @@ def find_tweets_with_combined_keywords(tweets, combined_keyword):
 #     my_util.write_csv_file(home_dir + source_dir + 'hash_tweets_intersect_size', False, True, intersection_file)
 
 
-def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_nr):
+def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name):
 
     header = ['the_keyword', 'the_size', 'other_keyword', 'other_size', 'intersection_size']
     intersection_file = []
@@ -139,7 +141,7 @@ def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, f
     print 'number of comparisons to remove intersections:', comparison_nr
     if intersection_file:# check if intersection_file is not empty
         intersection_file.insert(0, header)
-        my_util.write_csv_file(home_dir + save_dir + current_dir + 'intersecttion_size' + str(file_nr), False, True, intersection_file)
+        my_util.write_csv_file(home_dir + save_dir + current_dir + 'intersecttion_size_' + file_name, False, True, intersection_file)
 
 ###################################################### read source data ################################################
 hash_tweets = read_hash_tweets_source_data()
@@ -219,17 +221,17 @@ for ts_set in test_sets:
                                     print 'number of tweets containing ' + str(keyword) + ' :', len(tweets_with_keyword)
 
                                 # remove intersections within the positive set
-                                remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_pos, 1)
+                                remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_pos, 'pos_pos')
                                 # remove intersections within the combined_pos set
-                                remove_intersection_from(tweets_with_combined_keywords_pos, tweets_with_combined_keywords_pos, 2)
+                                remove_intersection_from(tweets_with_combined_keywords_pos, tweets_with_combined_keywords_pos, 'combPos_combPos')
                                 # remove intersection of the tweets_with_combined_keywords_pos from the positive set
-                                remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_combined_keywords_pos, 3)
+                                remove_intersection_from(tweets_with_combined_keywords_pos, tweets_with_hash_keywords_pos, 'combPos_pos')
                                 # remove intersections within the negative set
-                                remove_intersection_from(tweets_with_hash_keywords_neg, tweets_with_hash_keywords_neg, 4)
+                                remove_intersection_from(tweets_with_hash_keywords_neg, tweets_with_hash_keywords_neg, 'neg_neg')
                                 # remove intersection of negative set from positive set
-                                remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, 5)
+                                remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, 'pos_neg')
                                 # remove intersection of negative set from combined_positive set
-                                remove_intersection_from(tweets_with_combined_keywords_pos, tweets_with_hash_keywords_neg, 6)
+                                remove_intersection_from(tweets_with_combined_keywords_pos, tweets_with_hash_keywords_neg, 'combPos_neg')
 
 
                                 all_hash_tweets_pos = []
