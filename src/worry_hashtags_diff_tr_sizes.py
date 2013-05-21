@@ -8,17 +8,14 @@ import copy
 import itertools
 import operator
 import math
-import re
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_diff_train_size/20_10_2013/'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_diff_train_size/16_10_2013/'
 # source_dir = '/worry_hashtags/source/'
 # save_dir = '/worry_hashtags/'
 ########################################################################################################################
-n_slices = 1
-equal_sized_pos_neg_train_sets = True
-########################################################################################################################
+n_slices = 10
 test_sets = ['hand_picked_data', 'mech_turk']
 remove_retweets = False
 remove_stpwds_for_unigrams = False
@@ -60,21 +57,17 @@ def read_hash_tweets_source_data():
     else:
         tweet_hashtags_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_20_05_2013_noDup', False, True)
         tweet_hashtags_noDup = [t[0] for t in tweet_hashtags_noDup]
-        tweet_hashtags_noDup = tweet_hashtags_noDup[:1000]
+        #tweet_hashtags_noDup = tweet_hashtags_noDup[:100]
 
     return tweet_hashtags_noDup
 
-def find_tweets_with_hash_keyword(tweets, keyword):
-    tweets_with_keyword_at_the_end = []
-    tweets_with_keyword = []
-    for tweet_text in tweets:
-        if keyword in tweet_text:
-            tweets_with_keyword.append(tweet_text)
-            find = keyword + r'(\s+#\w+)*$'
-            if re.search(find, tweet_text) <> None:
-                tweets_with_keyword_at_the_end.append(tweet_text)
+def find_tweets_with_keyword(tweets, keyword):
+    tweets_with_the_keyword = []
+    for tweet in tweets:
+        if keyword in tweet:
+            tweets_with_the_keyword.append(tweet)
 
-    return tweets_with_keyword, tweets_with_keyword_at_the_end
+    return tweets_with_the_keyword
 
 def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name):
 
@@ -152,12 +145,12 @@ for ts_set in test_sets:
                     tweets_with_hash_keywords_neg = {}
 
                     for keyword in keywords_pos:
-                        tweets_with_keyword, tweets_with_keyword_at_the_end = find_tweets_with_hash_keyword(hash_tweets, keyword)
+                        tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
                         tweets_with_hash_keywords_pos[keyword] = tweets_with_keyword
                         print 'number of tweets containing '+ keyword + ' :', len(tweets_with_keyword)
 
                     for keyword in keywords_neg:
-                        tweets_with_keyword, tweets_with_keyword_at_the_end = find_tweets_with_hash_keyword(hash_tweets, keyword)
+                        tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
                         tweets_with_hash_keywords_neg[keyword] = tweets_with_keyword
                         print 'number of tweets containing ' + keyword + ' :', len(tweets_with_keyword)
 
@@ -197,13 +190,11 @@ for ts_set in test_sets:
 
                     #################################################### training set size curve #################################################
                     # shuffle to mix all labels --> this part is also needed
+                    min_size = min(len(all_hash_tweets_pos), len(all_hash_tweets_neg))
                     random.shuffle(all_hash_tweets_pos)
                     random.shuffle(all_hash_tweets_neg)
-
-                    if equal_sized_pos_neg_train_sets:
-                        min_pos_neg_size = min(len(all_hash_tweets_pos), len(all_hash_tweets_neg))
-                        all_hash_tweets_pos = all_hash_tweets_pos[: min_pos_neg_size]
-                        all_hash_tweets_neg = all_hash_tweets_neg[: min_pos_neg_size]
+                    all_hash_tweets_pos = all_hash_tweets_pos[: min_size]
+                    all_hash_tweets_neg = all_hash_tweets_neg[: min_size]
 
                     slice_size_pos = int(math.ceil(len(all_hash_tweets_pos)/n_slices))
                     slice_size_neg = int(math.ceil(len(all_hash_tweets_neg)/n_slices))
