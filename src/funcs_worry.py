@@ -805,3 +805,17 @@ def read_hand_picked_data(home_dir, source_dir):
     print 'test_set_others size:', len(tweets_test_others)
 
     return tweets_test_worry, tweets_test_not_worry, tweets_test_others
+
+def remove_url(tweet_text):
+    if 'http' in tweet_text:
+        #print tweet_text
+        # p = re.compile(r'http.+', re.DOTALL)
+        # t_no_url = re.sub(p, '', tweet_text)
+        tweet_text_no_url = re.sub(r'\s+http\S+', '', tweet_text, count=0, flags=re.S)
+        #print tweet_text_no_url
+
+        return tweet_text_no_url
+
+    else:
+        return tweet_text
+

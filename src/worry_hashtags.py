@@ -12,12 +12,13 @@ import re
 
 home_dir = os.path.expanduser('~')
 source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_diff_train_size/20_10_2013/'
+save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_the_end/20_05_2013/'
 # source_dir = '/worry_hashtags/source/'
 # save_dir = '/worry_hashtags/'
 ########################################################################################################################
 n_slices = 1
 equal_sized_pos_neg_train_sets = True
+hash_labels_at_the_end_flags = [True, False]
 ########################################################################################################################
 test_sets = ['hand_picked_data', 'mech_turk']
 remove_retweets = False
@@ -60,21 +61,43 @@ def read_hash_tweets_source_data():
     else:
         tweet_hashtags_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_20_05_2013_noDup', False, True)
         tweet_hashtags_noDup = [t[0] for t in tweet_hashtags_noDup]
-        tweet_hashtags_noDup = tweet_hashtags_noDup[:1000]
+        #tweet_hashtags_noDup = tweet_hashtags_noDup[:100]
 
     return tweet_hashtags_noDup
 
 def find_tweets_with_hash_keyword(tweets, keyword):
-    tweets_with_keyword_at_the_end = []
     tweets_with_keyword = []
     for tweet_text in tweets:
         if keyword in tweet_text:
             tweets_with_keyword.append(tweet_text)
-            find = keyword + r'(\s+#\w+)*$'
-            if re.search(find, tweet_text) <> None:
-                tweets_with_keyword_at_the_end.append(tweet_text)
 
-    return tweets_with_keyword, tweets_with_keyword_at_the_end
+    return tweets_with_keyword
+
+def find_tweets_with_hash_keyword_at_the_end(tweets, keyword):
+    tweets_with_the_keyword_at_the_end = []
+    for tweet_text in tweets:
+
+        tweet_text_no_url = funcs_worry.remove_url(tweet_text)
+
+        #pattern = keyword + r'(\s+#\w+)*$'
+        pattern = keyword + r'(\s*#\w+)*$'
+        if re.search(pattern, tweet_text_no_url) <> None:
+            tweets_with_the_keyword_at_the_end.append(tweet_text)
+
+    return tweets_with_the_keyword_at_the_end
+
+def find_tweets_with_hash_keyword_at_the_end_with_emoticons(tweets, keyword):
+    return_tweets = []
+    for tweet_text in tweets:
+        if keyword in tweet_text:
+
+            tweet_text_no_url = funcs_worry.remove_url(tweet_text)
+
+            pattern = keyword + r'\s*\W*\s*$'
+            if re.search(pattern, tweet_text_no_url) <> None:
+                return_tweets.append(tweet_text)
+
+    return return_tweets
 
 def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name):
 
@@ -116,209 +139,249 @@ hand_picked_neg = not_worried_hand_picked + nothing_hand_picked
 
 keywords_source_pos = ['#worried']#, '#anxious']
 #keywords_combined_source_pos = [('worry', 'help'), ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
-keywords_source_neg = ['#easy']#, '#relaxed', '#calm']
+keywords_source_neg = ['#calm', '#easy']#, '#relaxed', ]
+
+###################################################### read source labels ################################################
+source_tweets_with_hash_keywords_pos = {}
+source_tweets_with_hash_keywords_at_end_pos = {}
+for keyword in keywords_source_pos:
+
+    tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
+    tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
+
+    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
+
+    source_tweets_with_hash_keywords_pos[keyword] = tweets_with_hash_keyword[: min_size]
+    source_tweets_with_hash_keywords_at_end_pos[keyword] = tweets_with_hash_keyword_at_end[: min_size]
+
+source_tweets_with_hash_keywords_neg = {}
+source_tweets_with_hash_keywords_at_end_neg = {}
+for keyword in keywords_source_neg:
+
+    tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
+    tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
+
+    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
+
+    source_tweets_with_hash_keywords_neg[keyword] = tweets_with_hash_keyword[: min_size]
+    source_tweets_with_hash_keywords_at_end_neg[keyword] = tweets_with_hash_keyword_at_end[: min_size]
+########################################################################################################################
 
 statistics = []
-header = ['tr_set_pos', 'tr_set_neg', 'ts_set',
+header = ['hash_labels_at_end', 'tr_set_pos', 'tr_set_neg', 'ts_set',
     'min_ngram', 'max_ngram', 'n_features', 'svm_params',
     'tr_size_pos', 'tr_size_neg', 'ts_size_pos', 'ts_size_neg',
     'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg', 'f1_score_pos', 'f1_score_neg', 'f1_mean', 'f1_stdev']
 
-# loop through all test sets
-for ts_set in test_sets:
+for hash_labels_at_end in hash_labels_at_the_end_flags:
 
-    # i is the subset length of keywords_source_pos
-    for i in range(1, len(keywords_source_pos)+1):
-        # j is the subset length of keywords_source_neg
-        for j in range(1, len(keywords_source_neg)+1):
+    # loop through all test sets
+    for ts_set in test_sets:
 
-            # loop through all subsets of keywords_source_pos
-            for keywords_pos in itertools.combinations(keywords_source_pos, i):
-                keywords_pos = list(keywords_pos)
-                # loop through all subsets of keywords_source_neg
-                for keywords_neg in itertools.combinations(keywords_source_neg, j):
-                    keywords_neg = list(keywords_neg)
+        # i is the subset length of keywords_source_pos
+        for i in range(1, len(keywords_source_pos)+1):
+            # j is the subset length of keywords_source_neg
+            for j in range(1, len(keywords_source_neg)+1):
 
-                    tr_set_pos, tr_set_neg = keywords_pos, keywords_neg
+                # loop through all subsets of keywords_source_pos
+                for keywords_pos in itertools.combinations(keywords_source_pos, i):
+                    keywords_pos = list(keywords_pos)
+                    # loop through all subsets of keywords_source_neg
+                    for keywords_neg in itertools.combinations(keywords_source_neg, j):
+                        keywords_neg = list(keywords_neg)
 
-                    ############################################### current dir to save stuff for each iteration# ###############################
-                    current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts_set + '/'
+                        tr_set_pos, tr_set_neg = keywords_pos, keywords_neg
 
-                    if not os.path.exists(home_dir +  save_dir + current_dir):
-                        os.makedirs(home_dir +  save_dir + current_dir)
-                    #############################################################################################################################
+                        ############################################### current dir to save stuff for each iteration# ###############################
+                        current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts_set + '/'
+                        if hash_labels_at_end:
+                            current_dir = 'endHash_' + current_dir
 
-                    tweets_with_hash_keywords_pos = {}
-                    tweets_with_hash_keywords_neg = {}
+                        if not os.path.exists(home_dir +  save_dir + current_dir):
+                            os.makedirs(home_dir +  save_dir + current_dir)
+                        #############################################################################################################################
 
-                    for keyword in keywords_pos:
-                        tweets_with_keyword, tweets_with_keyword_at_the_end = find_tweets_with_hash_keyword(hash_tweets, keyword)
-                        tweets_with_hash_keywords_pos[keyword] = tweets_with_keyword
-                        print 'number of tweets containing '+ keyword + ' :', len(tweets_with_keyword)
+                        tweets_with_hash_keywords_pos = {}
+                        tweets_with_hash_keywords_neg = {}
 
-                    for keyword in keywords_neg:
-                        tweets_with_keyword, tweets_with_keyword_at_the_end = find_tweets_with_hash_keyword(hash_tweets, keyword)
-                        tweets_with_hash_keywords_neg[keyword] = tweets_with_keyword
-                        print 'number of tweets containing ' + keyword + ' :', len(tweets_with_keyword)
+                        for keyword in keywords_pos:
 
-                    # remove intersections within the positive set
-                    remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_pos, 'pos_pos')
-                    # remove intersections within the negative set
-                    remove_intersection_from(tweets_with_hash_keywords_neg, tweets_with_hash_keywords_neg, 'neg_neg')
-                    # remove intersection of negative set from positive set
-                    remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, 'pos_neg')
+                            if not hash_labels_at_end:
+                                tweets_with_hash_keywords_pos[keyword] = source_tweets_with_hash_keywords_pos[keyword]
+                                print 'number of tweets containing ' + keyword + ' :', len(tweets_with_hash_keywords_pos[keyword])
+                            else:
+                                tweets_with_hash_keywords_pos[keyword] = source_tweets_with_hash_keywords_at_end_pos[keyword]
+                                print 'number of tweets containing ' + keyword + ' :', len(tweets_with_hash_keywords_pos[keyword])
 
-                    sizes_pos =[]
-                    for tweets in tweets_with_hash_keywords_pos.values():
-                        sizes_pos.extend([len(tweets)])
-                    print sizes_pos
+                        for keyword in keywords_neg:
 
-                    sizes_neg = []
-                    for tweets in tweets_with_hash_keywords_neg.values():
-                        sizes_neg.extend([len(tweets)])
-                    print sizes_neg
+                            if not hash_labels_at_end:
+                                tweets_with_hash_keywords_neg[keyword] = source_tweets_with_hash_keywords_neg[keyword]
+                                print 'number of tweets containing ' + keyword + ' :', len(tweets_with_hash_keywords_neg[keyword])
+                            else:
+                                tweets_with_hash_keywords_neg[keyword] = source_tweets_with_hash_keywords_at_end_neg[keyword]
+                                print 'number of tweets containing ' + keyword + ' :', len(tweets_with_hash_keywords_neg[keyword])
 
-                    all_hash_tweets_pos = []
-                    for tweets in tweets_with_hash_keywords_pos.values():
-                        random.shuffle(tweets)
-                        # take an equal size of each label
-                        all_hash_tweets_pos.extend(tweets[: min(sizes_pos)])
-                        #all_hash_tweets_pos.extend(tweets)
+                        # remove intersections within the positive set
+                        remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_pos, 'pos_pos')
+                        # remove intersections within the negative set
+                        remove_intersection_from(tweets_with_hash_keywords_neg, tweets_with_hash_keywords_neg, 'neg_neg')
+                        # remove intersection of negative set from positive set
+                        remove_intersection_from(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, 'pos_neg')
 
-                    all_hash_tweets_neg = []
-                    for tweets in tweets_with_hash_keywords_neg.values():
-                        random.shuffle(tweets)
-                        # take an equal size of each label
-                        all_hash_tweets_neg.extend(tweets[: min(sizes_neg)])
-                        #all_hash_tweets_neg.extend(tweets)
+                        sizes_pos =[]
+                        for tweets in tweets_with_hash_keywords_pos.values():
+                            sizes_pos.extend([len(tweets)])
+                        print sizes_pos
 
-                    hash_tweets_train_labs_pos = tweets_with_hash_keywords_pos.keys()
-                    hash_tweets_train_labs_neg = tweets_with_hash_keywords_neg.keys()
+                        sizes_neg = []
+                        for tweets in tweets_with_hash_keywords_neg.values():
+                            sizes_neg.extend([len(tweets)])
+                        print sizes_neg
 
-                    #################################################### training set size curve #################################################
-                    # shuffle to mix all labels --> this part is also needed
-                    random.shuffle(all_hash_tweets_pos)
-                    random.shuffle(all_hash_tweets_neg)
+                        all_hash_tweets_pos = []
+                        for tweets in tweets_with_hash_keywords_pos.values():
+                            random.shuffle(tweets)
+                            # take an equal size of each label
+                            all_hash_tweets_pos.extend(tweets[: min(sizes_pos)])
+                            #all_hash_tweets_pos.extend(tweets)
 
-                    if equal_sized_pos_neg_train_sets:
-                        min_pos_neg_size = min(len(all_hash_tweets_pos), len(all_hash_tweets_neg))
-                        all_hash_tweets_pos = all_hash_tweets_pos[: min_pos_neg_size]
-                        all_hash_tweets_neg = all_hash_tweets_neg[: min_pos_neg_size]
+                        all_hash_tweets_neg = []
+                        for tweets in tweets_with_hash_keywords_neg.values():
+                            random.shuffle(tweets)
+                            # take an equal size of each label
+                            all_hash_tweets_neg.extend(tweets[: min(sizes_neg)])
+                            #all_hash_tweets_neg.extend(tweets)
 
-                    slice_size_pos = int(math.ceil(len(all_hash_tweets_pos)/n_slices))
-                    slice_size_neg = int(math.ceil(len(all_hash_tweets_neg)/n_slices))
-                    for n in range(1, n_slices+1):
+                        hash_tweets_train_labs_pos = tweets_with_hash_keywords_pos.keys()
+                        hash_tweets_train_labs_neg = tweets_with_hash_keywords_neg.keys()
 
-                        training_set_pos = all_hash_tweets_pos[0 : n*slice_size_pos]
-                        training_set_neg = all_hash_tweets_neg[0 : n*slice_size_neg]
+                        #################################################### training set size curve #################################################
+                        # shuffle to mix all labels --> this part is also needed
+                        random.shuffle(all_hash_tweets_pos)
+                        random.shuffle(all_hash_tweets_neg)
 
+                        if equal_sized_pos_neg_train_sets:
+                            min_pos_neg_size = min(len(all_hash_tweets_pos), len(all_hash_tweets_neg))
+                            all_hash_tweets_pos = all_hash_tweets_pos[: min_pos_neg_size]
+                            all_hash_tweets_neg = all_hash_tweets_neg[: min_pos_neg_size]
 
-                        print 'creating feature vectors...'
+                        slice_size_pos = int(math.ceil(len(all_hash_tweets_pos)/n_slices))
+                        slice_size_neg = int(math.ceil(len(all_hash_tweets_neg)/n_slices))
+                        for n in range(1, n_slices+1):
 
-                        features_dict = {}
-                        features_count_dict = {}
-                        #the very first index is always 1.
-                        if new_normalisation_flag:
-                            max_index = 0
-                        else:
-                            max_index = 1
+                            training_set_pos = all_hash_tweets_pos[0 : n*slice_size_pos]
+                            training_set_neg = all_hash_tweets_neg[0 : n*slice_size_neg]
 
-                        # since there is no intersection between tweets containing keywords,
-                        # we can send the aggregated tweets into the function below:
-                        hash_tweets_feature_vects_pos, hash_tweets_texts_pos, max_index, hash_tweets_norm_factors_pos = \
-                            funcs_worry.get_sparse_feature_vector_worry(
-                                training_set_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                            remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_pos, random)
+                            my_util.write_csv_file(home_dir + save_dir+current_dir + 'training_set_pos', False, True, [[t] for t in training_set_pos])
+                            my_util.write_csv_file(home_dir + save_dir+current_dir + 'training_set_neg', False, True, [[t] for t in training_set_neg])
 
-                        hash_tweets_feature_vects_neg, hash_tweets_texts_neg, max_index, hash_tweets_norm_factors_neg = \
-                            funcs_worry.get_sparse_feature_vector_worry(
-                                training_set_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                            remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_neg, random)
+                            print 'creating feature vectors...'
 
-                        ###################################################### training set ####################################
-                        train_set_vects_pos = hash_tweets_feature_vects_pos
-                        train_set_vects_neg = hash_tweets_feature_vects_neg
-                        ########################################################################################################
+                            features_dict = {}
+                            features_count_dict = {}
+                            #the very first index is always 1.
+                            if new_normalisation_flag:
+                                max_index = 0
+                            else:
+                                max_index = 1
 
-                        funcs_worry.write_features_count_dict_to_csv(features_count_dict,
-                                                                     home_dir + save_dir + current_dir + 'features_count_dict_training_'+str(n))
-                        funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict,
-                                                                    -1, home_dir + save_dir + current_dir + 'features_freq_training_'+str(n))
-
-                        if ts_set == 'hand_picked_data':
-
-                            hand_picked_feature_vects_pos, hand_picked_texts_pos, max_index, hand_picked_norm_factors_pos = \
+                            # since there is no intersection between tweets containing keywords,
+                            # we can send the aggregated tweets into the function below:
+                            hash_tweets_feature_vects_pos, hash_tweets_texts_pos, max_index, hash_tweets_norm_factors_pos = \
                                 funcs_worry.get_sparse_feature_vector_worry(
-                                    hand_picked_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                    remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                    training_set_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_pos, random)
 
-                            hand_picked_feature_vects_neg, hand_picked_texts_neg, max_index, hand_picked_norm_factors_neg = \
+                            hash_tweets_feature_vects_neg, hash_tweets_texts_neg, max_index, hash_tweets_norm_factors_neg = \
                                 funcs_worry.get_sparse_feature_vector_worry(
-                                    hand_picked_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                    remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                    training_set_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_neg, random)
 
-                            #funcs_worry.write_features_dict_to_csv(features_dict, home_dir + save_dir + current_dir + 'features_dict_train' + str(n))
+                            ###################################################### training set ####################################
+                            train_set_vects_pos = hash_tweets_feature_vects_pos
+                            train_set_vects_neg = hash_tweets_feature_vects_neg
+                            ########################################################################################################
 
-                            ###################################################### test set ####################################
-                            test_set_vects_pos = hand_picked_feature_vects_pos
-                            test_set_vects_neg = hand_picked_feature_vects_neg
+                            funcs_worry.write_features_count_dict_to_csv(features_count_dict,
+                                                                         home_dir + save_dir + current_dir + 'features_count_dict_training_'+str(n))
+                            funcs_worry.write_features_and_freqs_to_csv(features_dict, features_count_dict,
+                                                                        -1, home_dir + save_dir + current_dir + 'features_freq_training_'+str(n))
 
-                            test_set_texts_pos = hand_picked_texts_pos
-                            test_set_texts_neg = hand_picked_texts_neg
-                            ####################################################################################################
+                            if ts_set == 'hand_picked_data':
 
-                        if ts_set == 'mech_turk':
+                                hand_picked_feature_vects_pos, hand_picked_texts_pos, max_index, hand_picked_norm_factors_pos = \
+                                    funcs_worry.get_sparse_feature_vector_worry(
+                                        hand_picked_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                        remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
-                            mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
-                                funcs_worry.get_sparse_feature_vector_worry(
-                                    mech_turk_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                    remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                hand_picked_feature_vects_neg, hand_picked_texts_neg, max_index, hand_picked_norm_factors_neg = \
+                                    funcs_worry.get_sparse_feature_vector_worry(
+                                        hand_picked_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                        remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
-                            mech_turk_feature_vects_neg, mech_turk_texts_neg, max_index, mech_turk_norm_factors_neg = \
-                                funcs_worry.get_sparse_feature_vector_worry(
-                                    mech_turk_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                    remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                #funcs_worry.write_features_dict_to_csv(features_dict, home_dir + save_dir + current_dir + 'features_dict_train' + str(n))
 
-                            ###################################################### test set ####################################
-                            test_set_vects_pos = mech_turk_feature_vects_pos
-                            test_set_vects_neg = mech_turk_feature_vects_neg
+                                ###################################################### test set ####################################
+                                test_set_vects_pos = hand_picked_feature_vects_pos
+                                test_set_vects_neg = hand_picked_feature_vects_neg
 
-                            test_set_texts_pos = mech_turk_texts_pos
-                            test_set_texts_neg = mech_turk_texts_neg
-                            ####################################################################################################
+                                test_set_texts_pos = hand_picked_texts_pos
+                                test_set_texts_neg = hand_picked_texts_neg
+                                ####################################################################################################
 
-                        funcs_worry.write_features_dict_to_csv(features_dict, home_dir + save_dir + current_dir + 'features_dict_' + str(n))
-                        n_features = len(features_dict)
+                            if ts_set == 'mech_turk':
 
-                        tr_size_pos, tr_size_neg = len(train_set_vects_pos), len(train_set_vects_neg)
-                        ts_size_pos, ts_size_neg = len(test_set_vects_pos), len(test_set_vects_neg)
-                        training_sizes = {'pos':tr_size_pos, 'neg':tr_size_neg}
+                                mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
+                                    funcs_worry.get_sparse_feature_vector_worry(
+                                        mech_turk_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                        remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
-                        x_train = train_set_vects_pos + train_set_vects_neg
-                        y_train = [class_labels['pos']] * len(train_set_vects_pos) + [class_labels['neg']] * len(train_set_vects_neg)
+                                mech_turk_feature_vects_neg, mech_turk_texts_neg, max_index, mech_turk_norm_factors_neg = \
+                                    funcs_worry.get_sparse_feature_vector_worry(
+                                        mech_turk_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                        remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
-                        x_test = test_set_vects_pos + test_set_vects_neg
-                        y_test = [class_labels['pos']] * len(test_set_vects_pos) + [class_labels['neg']] * len(test_set_vects_neg)
-                        test_set_texts = test_set_texts_pos + test_set_texts_neg
+                                ###################################################### test set ####################################
+                                test_set_vects_pos = mech_turk_feature_vects_pos
+                                test_set_vects_neg = mech_turk_feature_vects_neg
 
-                        svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, class_labels, training_sizes)
+                                test_set_texts_pos = mech_turk_texts_pos
+                                test_set_texts_neg = mech_turk_texts_neg
+                                ####################################################################################################
 
-                        p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
+                            funcs_worry.write_features_dict_to_csv(features_dict, home_dir + save_dir + current_dir + 'features_dict_' + str(n))
+                            n_features = len(features_dict)
 
-                        print 'calculating validation statistics ...'
-                        prediction_result, accuracy, precisions, recalls, f1_scores = \
-                            funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, p_val, class_labels)
+                            tr_size_pos, tr_size_neg = len(train_set_vects_pos), len(train_set_vects_neg)
+                            ts_size_pos, ts_size_neg = len(test_set_vects_pos), len(test_set_vects_neg)
+                            training_sizes = {'pos':tr_size_pos, 'neg':tr_size_neg}
 
-                        precision_pos, precision_neg = precisions['pos'], precisions['neg']
-                        recall_pos, recall_neg = recalls['pos'], recalls['neg']
-                        f1_score_pos, f1_score_neg = f1_scores['pos'], f1_scores['neg']
-                        f1_mean = round((f1_score_pos + f1_score_neg) / 2, 2)
-                        f1_stdev = round(math.sqrt((f1_score_pos-f1_mean) ** 2 + (f1_score_neg-f1_mean) ** 2), 2)# note we divide by 2-1.
-                        my_util.write_csv_file(home_dir + save_dir + current_dir + 'prediction_result_' + str(n), False, True, prediction_result)
+                            x_train = train_set_vects_pos + train_set_vects_neg
+                            y_train = [class_labels['pos']] * len(train_set_vects_pos) + [class_labels['neg']] * len(train_set_vects_neg)
 
-                        statistic = [eval(h) for h in header]
-                        my_util.write_csv_file(home_dir + save_dir + current_dir + 'statistic_' + str(n), False, True, [header, statistic])
-                        statistics.append(statistic)
+                            x_test = test_set_vects_pos + test_set_vects_neg
+                            y_test = [class_labels['pos']] * len(test_set_vects_pos) + [class_labels['neg']] * len(test_set_vects_neg)
+                            test_set_texts = test_set_texts_pos + test_set_texts_neg
+
+                            svm_params = funcs_worry.get_params(svm_type, kernel_type, cost, nu, balance_sets, class_labels, training_sizes)
+
+                            p_label, p_acc, p_val = funcs_worry.train_and_test_with_libsvm(y_train, x_train, y_test, x_test, svm_params)
+
+                            print 'calculating validation statistics ...'
+                            prediction_result, accuracy, precisions, recalls, f1_scores = \
+                                funcs_worry.calc_prediction_stats_2(y_test, test_set_texts, p_label, p_val, class_labels)
+
+                            precision_pos, precision_neg = precisions['pos'], precisions['neg']
+                            recall_pos, recall_neg = recalls['pos'], recalls['neg']
+                            f1_score_pos, f1_score_neg = f1_scores['pos'], f1_scores['neg']
+                            f1_mean = round((f1_score_pos + f1_score_neg) / 2, 2)
+                            f1_stdev = round(math.sqrt((f1_score_pos-f1_mean) ** 2 + (f1_score_neg-f1_mean) ** 2), 2)# note we divide by 2-1.
+                            my_util.write_csv_file(home_dir + save_dir + current_dir + 'prediction_result_' + str(n), False, True, prediction_result)
+
+                            statistic = [eval(h) for h in header]
+                            my_util.write_csv_file(home_dir + save_dir + current_dir + 'statistic_' + str(n), False, True, [header, statistic])
+                            statistics.append(statistic)
 
 # # sort in descending order based on f_mean.
 # statistics = sorted(statistics, key = operator.itemgetter(header.index('f1_mean')), reverse = True)
