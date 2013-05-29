@@ -63,13 +63,27 @@ def read_hash_tweets_source_data():
 
     return tweet_hashtags_noDup
 
-def find_tweets_with_keyword(tweets, keyword):
-    tweets_with_the_keyword = []
-    for tweet in tweets:
-        if keyword in tweet:
-            tweets_with_the_keyword.append(tweet)
+def find_tweets_with_hash_keyword(tweets, keyword):
+    tweets_with_keyword = []
+    for tweet_text in tweets:
+        if keyword in tweet_text:
+            tweets_with_keyword.append(tweet_text)
 
-    return tweets_with_the_keyword
+    return tweets_with_keyword
+
+def find_tweets_with_hash_keyword_at_the_end(tweets, keyword):
+    tweets_with_the_keyword_at_the_end = []
+    for tweet_text in tweets:
+
+        tweet_text_no_url = funcs_worry.remove_url(tweet_text)
+
+        #find any pattern like: #keyword (emoticons spaces emoticons #another_keyword#and_another_keyword) (spaces emoticons xxxx)
+        # the x's at the end (xxxx) could be a sign of sympathy and, hence, a sign of worry!
+        pattern = '(?u)' + keyword + r'(\W*\s*W*(#\w+)*)*(\s\W*x*)*$'
+        if re.search(pattern, tweet_text_no_url) <> None:
+            tweets_with_the_keyword_at_the_end.append(tweet_text)
+
+    return tweets_with_the_keyword_at_the_end
 
 def find_tweets_with_combined_keywords(tweets, combined_keyword):
     tweets_with_the_keyword = []
@@ -86,38 +100,6 @@ def find_tweets_with_combined_keywords(tweets, combined_keyword):
 
     my_util.write_csv_file(home_dir + save_dir + current_dir + str(combined_keyword), False, True, [[t] for t in tweets_with_the_keyword])
     return tweets_with_the_keyword
-
-# def remove_intersections(tweets_with_keywords_pos, tweets_with_keywords_neg):
-#
-#     intersection_file = []
-#     comparison_nr = 0
-#     tweets_with_keywords = copy.deepcopy(tweets_with_keywords_pos)
-#     tweets_with_keywords.update(tweets_with_keywords_neg)
-#
-#     traversed_keywords = []
-#     for keyword, tweets in tweets_with_keywords.items():
-#
-#         traversed_keywords.append(keyword)
-#         no_intersect = tweets[:]
-#         for other_keyword, other_tweets in tweets_with_keywords.items():
-#
-#             if other_keyword not in traversed_keywords:
-#
-#                 comparison_nr+=1
-#                 print keyword + ' and ' + other_keyword + ' ...'
-#                 other_tweets = tweets_with_keywords[other_keyword]
-#                 no_intersect = funcs_worry.remove_intersection_from_the_list(no_intersect, other_tweets)
-#                 # # this part is to visualise what is the original intersection between two lists
-#                 # real_no_intersect = funcs_worry.remove_intersection_from_the_list(tweets, other_tweets)
-#                 # intersection_file.append([keyword, other_keyword, len(tweets)-len(real_no_intersect)])
-#
-#         if keyword in tweets_with_keywords_pos:
-#             tweets_with_keywords_pos[keyword] = no_intersect
-#         if keyword in tweets_with_keywords_neg:
-#             tweets_with_keywords_neg[keyword] = no_intersect
-#     print 'number of comparisons to remove intersections:', comparison_nr
-#     my_util.write_csv_file(home_dir + source_dir + 'hash_tweets_intersect_size', False, True, intersection_file)
-
 
 def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name):
 
@@ -159,10 +141,36 @@ hand_picked_neg = not_worried_hand_picked + nothing_hand_picked
 
 keywords_source_pos = ['#worried', '#anxious']
 keywords_combined_source_pos = [('worry', 'help'), ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
-keywords_source_neg = ['#easy', '#relaxed', '#calm']
+keywords_source_neg = ['#easy', '#calm', '#relaxed']
+
+###################################################### read source labels ################################################
+source_tweets_with_hash_keywords_pos = {}
+source_tweets_with_hash_keywords_at_end_pos = {}
+for keyword in keywords_source_pos:
+
+    tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
+    tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
+
+    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
+
+    source_tweets_with_hash_keywords_pos[keyword] = tweets_with_hash_keyword[: min_size]
+    source_tweets_with_hash_keywords_at_end_pos[keyword] = tweets_with_hash_keyword_at_end[: min_size]
+
+source_tweets_with_hash_keywords_neg = {}
+source_tweets_with_hash_keywords_at_end_neg = {}
+for keyword in keywords_source_neg:
+
+    tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
+    tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
+
+    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
+
+    source_tweets_with_hash_keywords_neg[keyword] = tweets_with_hash_keyword[: min_size]
+    source_tweets_with_hash_keywords_at_end_neg[keyword] = tweets_with_hash_keyword_at_end[: min_size]
+########################################################################################################################
 
 statistics = []
-header = ['tr_set_pos', 'tr_set_neg', 'ts_set',
+header = ['hash_labels_at_end', 'tr_set_pos', 'tr_set_neg', 'ts_set',
     'min_ngram', 'max_ngram', 'n_features', 'svm_params',
     'tr_size_pos', 'tr_size_neg', 'ts_size_pos', 'ts_size_neg',
     'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg', 'f1_score_pos', 'f1_score_neg', 'f1_mean', 'f1_stdev']
@@ -196,6 +204,8 @@ for ts_set in test_sets:
 
                                 ############################################### current dir to save stuff for each iteration# ########################
                                 current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts_set + '/'
+                                if hash_labels_at_end:
+                                    current_dir = 'endHash_' + current_dir
 
                                 if not os.path.exists(home_dir +  save_dir + current_dir):
                                     os.makedirs(home_dir +  save_dir + current_dir)
@@ -206,12 +216,12 @@ for ts_set in test_sets:
                                 tweets_with_combined_keywords_pos = {}
 
                                 for keyword in keywords_pos:
-                                    tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
+                                    tweets_with_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
                                     tweets_with_hash_keywords_pos[keyword] = tweets_with_keyword
                                     print 'number of tweets containing '+ keyword + ' :', len(tweets_with_keyword)
 
                                 for keyword in keywords_neg:
-                                    tweets_with_keyword = find_tweets_with_keyword(hash_tweets, keyword)
+                                    tweets_with_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
                                     tweets_with_hash_keywords_neg[keyword] = tweets_with_keyword
                                     print 'number of tweets containing ' + keyword + ' :', len(tweets_with_keyword)
 
