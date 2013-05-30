@@ -760,10 +760,10 @@ def filter_same_turked_tweets(tweets, threshold):
         unique_tweets = [t for t, l in clustered_tweets if l >= threshold]
         return unique_tweets#, clustered_tweets
 
-def read_amazon_mech_turk_data(home_dir, source_dir, threshold):
+def read_amazon_mech_turk_data(file_name, threshold):
 
     print 'reading Amazon MTurk source files ...'
-    tweets_MTurk = my_util.read_csv_file(home_dir + source_dir + 'AmazonMTurk', False, True)
+    tweets_MTurk = my_util.read_csv_file(file_name, False, True)
     header = tweets_MTurk[0]
     #tweets_MTurk = tweets_MTurk[:100]
     worrieds_MTurk = [t[header.index('Input.TEXT')] for t in tweets_MTurk if t[header.index('Answer.Worry')] == 'worry']

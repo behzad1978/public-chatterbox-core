@@ -131,17 +131,23 @@ def get_required_data():
 
     hash_tweets = read_hash_tweets_source_data()
 
-    worrieds_mech_turk, not_worrieds_mech_turk, tell_not_worry_mech_turk, nothing_MTurk = funcs_worry.read_amazon_mech_turk_data(home_dir, source_dir, 2)
-    mech_turk_pos = worrieds_mech_turk + tell_not_worry_mech_turk
-    mech_turk_neg = not_worrieds_mech_turk + nothing_MTurk
-    # the negative set size is smaller than the positive one. Hence, select an equal size for the positive set.
-    mech_turk_pos = random.sample(mech_turk_pos, len(mech_turk_neg))
+    worrieds_mech_turk_1, not_worrieds_mech_turk_1, tell_not_worry_mech_turk_1, nothing_MTurk_1 = \
+        funcs_worry.read_amazon_mech_turk_data(home_dir + source_dir + 'AmazonMTurk_1', 2)
+    
+    worrieds_mech_turk_2, not_worrieds_mech_turk_2, tell_not_worry_mech_turk_2, nothing_MTurk_2 = \
+        funcs_worry.read_amazon_mech_turk_data(home_dir + source_dir + 'AmazonMTurk_2', 2)
+    
+    mech_turk_pos_1 = worrieds_mech_turk_1 + tell_not_worry_mech_turk_1
+    mech_turk_neg_1 = not_worrieds_mech_turk_1 + nothing_MTurk_1
+
+    mech_turk_pos_2 = worrieds_mech_turk_2 + tell_not_worry_mech_turk_2
+    mech_turk_neg_2 = not_worrieds_mech_turk_2 + nothing_MTurk_2
 
     worried_hand_picked, not_worried_hand_picked, nothing_hand_picked = funcs_worry.read_hand_picked_data(home_dir, source_dir)
     hand_picked_pos = worried_hand_picked
     hand_picked_neg = not_worried_hand_picked + nothing_hand_picked
 
-    return hash_tweets, mech_turk_pos, mech_turk_neg, hand_picked_pos, hand_picked_neg
+    return hash_tweets, mech_turk_pos_1, mech_turk_neg_1, mech_turk_pos_2, mech_turk_neg_2, hand_picked_pos, hand_picked_neg
 ########################################################################################################################
 
 
@@ -387,7 +393,13 @@ final_header = ['hash_labels_at_end', 'tr_set_pos', 'tr_set_neg', 'ts_set',
     'accuracy', 'precision_pos', 'precision_neg', 'recall_pos', 'recall_neg', 'f1_score_pos', 'f1_score_neg', 'f1_mean', 'f1_stdev']
 
 ###################################################### read source data ################################################
-hash_tweets, mech_turk_pos, mech_turk_neg, hand_picked_pos, hand_picked_neg = get_required_data()
+hash_tweets, mech_turk_pos_1, mech_turk_neg_1, mech_turk_pos_2, mech_turk_neg_2, hand_picked_pos, hand_picked_neg = get_required_data()
+
+mech_turk_test_set_pos = random.sample(mech_turk_pos_1, 500) + random.sample(mech_turk_pos_2, 500)
+mech_turk_test_set_neg = random.sample(mech_turk_neg_1, 500) + random.sample(mech_turk_neg_2, 500)
+
+mech_turk_train_set_pos = [t for t in (mech_turk_pos_1 + mech_turk_pos_2) if t not in mech_turk_test_set_pos]
+mech_turk_train_set_neg = [t for t in (mech_turk_neg_1 + mech_turk_neg_2) if t not in mech_turk_test_set_neg]
 
 random.shuffle(hash_tweets)
 hash_tweets = hash_tweets[:100]

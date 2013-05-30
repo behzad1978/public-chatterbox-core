@@ -48,7 +48,7 @@ balance_sets = True
 
 def read_hash_tweets_source_data():
     if remove_retweets:
-        data_source = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags', False, True)
+        data_source = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_24_05_2013', False, True)
         header = data_source[0]
         tweet_hashtags = [row[header.index('text')] for row in data_source[1:]]
         tweet_hashtags = [t.lower() for t in tweet_hashtags]
@@ -57,7 +57,7 @@ def read_hash_tweets_source_data():
         my_util.write_csv_file(home_dir + source_dir + 'source_worry_hashtags_noDup', False, True,
                                [[t] for t in tweet_hashtags_noDup])
     else:
-        tweet_hashtags_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_noDup', False, True)
+        tweet_hashtags_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_24_05_2013_noDup', False, True)
         tweet_hashtags_noDup = [t[0] for t in tweet_hashtags_noDup]
         #tweet_hashtags_noDup = tweet_hashtags_noDup[:100]
 
@@ -128,11 +128,23 @@ def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, f
 ###################################################### read source data ################################################
 hash_tweets = read_hash_tweets_source_data()
 
-worrieds_mech_turk, not_worrieds_mech_turk, tell_not_worry_mech_turk, nothing_MTurk = funcs_worry.read_amazon_mech_turk_data(home_dir, source_dir, 2)
-mech_turk_pos = worrieds_mech_turk + tell_not_worry_mech_turk
-mech_turk_neg = not_worrieds_mech_turk + nothing_MTurk
-# the negative set size is smaller than the positive one. Hence, select an equal size for the positive set.
-mech_turk_pos = random.sample(mech_turk_pos, len(mech_turk_neg))
+worrieds_mech_turk_1, not_worrieds_mech_turk_1, tell_not_worry_mech_turk_1, nothing_MTurk_1 = \
+        funcs_worry.read_amazon_mech_turk_data(home_dir + source_dir + 'AmazonMTurk_1', 2)
+
+worrieds_mech_turk_2, not_worrieds_mech_turk_2, tell_not_worry_mech_turk_2, nothing_MTurk_2 = \
+    funcs_worry.read_amazon_mech_turk_data(home_dir + source_dir + 'AmazonMTurk_2', 2)
+
+mech_turk_pos_1 = worrieds_mech_turk_1 + tell_not_worry_mech_turk_1
+mech_turk_neg_1 = not_worrieds_mech_turk_1 + nothing_MTurk_1
+
+mech_turk_pos_2 = worrieds_mech_turk_2 + tell_not_worry_mech_turk_2
+mech_turk_neg_2 = not_worrieds_mech_turk_2 + nothing_MTurk_2
+
+mech_turk_test_set_pos = random.sample(mech_turk_pos_1, 500) + random.sample(mech_turk_pos_2, 500)
+mech_turk_test_set_neg = random.sample(mech_turk_neg_1, 500) + random.sample(mech_turk_neg_2, 500)
+
+mech_turk_train_set_pos = [t for t in (mech_turk_pos_1 + mech_turk_pos_2) if t not in mech_turk_test_set_pos]
+mech_turk_train_set_neg = [t for t in (mech_turk_neg_1 + mech_turk_neg_2) if t not in mech_turk_test_set_neg]
 
 worried_hand_picked, not_worried_hand_picked, nothing_hand_picked = funcs_worry.read_hand_picked_data(home_dir, source_dir)
 hand_picked_pos = worried_hand_picked
@@ -144,29 +156,25 @@ keywords_combined_source_pos = [('worry', 'help'), ('worry', 'eek'), ('anxious',
 keywords_source_neg = ['#easy', '#calm', '#relaxed']
 
 ###################################################### read source labels ################################################
-source_tweets_with_hash_keywords_pos = {}
+#source_tweets_with_hash_keywords_pos = {}
 source_tweets_with_hash_keywords_at_end_pos = {}
 for keyword in keywords_source_pos:
 
     tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
     tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
 
-    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
+    #source_tweets_with_hash_keywords_pos[keyword] = tweets_with_hash_keyword
+    source_tweets_with_hash_keywords_at_end_pos[keyword] = tweets_with_hash_keyword_at_end
 
-    source_tweets_with_hash_keywords_pos[keyword] = tweets_with_hash_keyword[: min_size]
-    source_tweets_with_hash_keywords_at_end_pos[keyword] = tweets_with_hash_keyword_at_end[: min_size]
-
-source_tweets_with_hash_keywords_neg = {}
+#source_tweets_with_hash_keywords_neg = {}
 source_tweets_with_hash_keywords_at_end_neg = {}
 for keyword in keywords_source_neg:
 
     tweets_with_hash_keyword = find_tweets_with_hash_keyword(hash_tweets, keyword)
     tweets_with_hash_keyword_at_end = find_tweets_with_hash_keyword_at_the_end(tweets_with_hash_keyword, keyword)
 
-    min_size = min(len(tweets_with_hash_keyword), len(tweets_with_hash_keyword_at_end))
-
-    source_tweets_with_hash_keywords_neg[keyword] = tweets_with_hash_keyword[: min_size]
-    source_tweets_with_hash_keywords_at_end_neg[keyword] = tweets_with_hash_keyword_at_end[: min_size]
+    #source_tweets_with_hash_keywords_neg[keyword] = tweets_with_hash_keyword
+    source_tweets_with_hash_keywords_at_end_neg[keyword] = tweets_with_hash_keyword_at_end
 ########################################################################################################################
 
 statistics = []
@@ -204,8 +212,6 @@ for ts_set in test_sets:
 
                                 ############################################### current dir to save stuff for each iteration# ########################
                                 current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts_set + '/'
-                                if hash_labels_at_end:
-                                    current_dir = 'endHash_' + current_dir
 
                                 if not os.path.exists(home_dir +  save_dir + current_dir):
                                     os.makedirs(home_dir +  save_dir + current_dir)
