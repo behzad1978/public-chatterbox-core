@@ -744,6 +744,17 @@ def remove_intersection_from_the_list(the_list, another_list):
     print 'intersection size between the two lists:', len(intersection)
     return the_list
 
+def remove_hash_tweets_duplicates(file_name):
+
+    data_source = my_util.read_csv_file(file_name, False, True)
+    header = data_source[0]
+    tweet_hashtags = [row[header.index('text')] for row in data_source[1:]]
+    tweet_hashtags = [t.lower() for t in tweet_hashtags]
+    tweet_hashtags = [' '.join(t.split()) for t in tweet_hashtags]
+    tweet_hashtags_noDup = remove_duplicate_tweets(tweet_hashtags, False, None)
+    my_util.write_csv_file(file_name + '_noDup', False, True, [[t] for t in tweet_hashtags_noDup])
+
+
 def filter_same_turked_tweets(tweets, threshold):
         # make all letters lower-case --> this is essential when comparing strings and also when using quick_ratio
         tweets = [t.lower() for t in tweets]
@@ -819,3 +830,59 @@ def remove_url(tweet_text):
     else:
         return tweet_text
 
+def find_tweets_with_hash_label(tweets, hash_label):
+
+    print 'finding tweets with ' + hash_label +' ...'
+    print 'data size:', len(tweets)
+    tweets_with_hash_label = []
+    for tweet_text in tweets:
+        if hash_label in tweet_text:
+            tweets_with_hash_label.append(tweet_text)
+
+    print 'No. of tweets with ' + hash_label + ' :', len(tweets_with_hash_label)
+
+    return tweets_with_hash_label
+
+def find_tweets_with_hash_label_at_the_end(tweets, label):
+
+    print 'finding tweets with ' + label + ' at end...'
+    print 'data size:', len(tweets)
+    #c=0
+    tweets_with_label_at_the_end = []
+    for tweet_text in tweets:
+        # c +=1
+        # if c % 1000 == 0:
+        #     print c
+
+        tweet_text_no_url = remove_url(tweet_text)
+
+        #find any pattern like: #keyword (emoticons spaces emoticons #another_keyword#and_another_keyword) (spaces emoticons xxxx)
+        # the x's at the end (xxxx) could be a sign of sympathy and, hence, a sign of worry!
+
+        #pattern = '(?u)' + keyword + r'(\W*\s*W*(#\w+)*)*(\s\W*x*)*$'
+        pattern = label + r'(\s*#\w+)*$'
+
+        if re.search(pattern, tweet_text_no_url) <> None:
+            tweets_with_label_at_the_end.append(tweet_text)
+
+    print 'No. of tweets with ' + label + ' at end:', len(tweets_with_label_at_the_end)
+    return tweets_with_label_at_the_end
+
+def find_tweets_with_combined_labels(tweets, combined_labels):
+
+    print 'finding tweets with ' + str(combined_labels) + ' ...'
+    print 'data size:', len(tweets)
+    tweets_with_combined_labels = []
+    for tweet in tweets:
+        # some keywords like 'help' might be followed by punctuation chars, like: 'help!'
+        # put a space between non-punc-chars and punc-chars
+        tweet_separated_puncs = re.sub(r"([^'\".,;:/?\!@#£$%^&*()_\-=+`~])(['\".,;:/?\!@#£$%^&*()_\-=+`~])", r"\1 \2", tweet)
+        # put a space between punc-chars (EXCEPT #) and non-punc-chars --> note: #label would stay as it is!
+        tweet_separated_puncs = re.sub(r"(['\".,;:/?\!£$%^&*()_\-=+`~])([^'\".,;:/?\!@#£$%^&*()_\-=+`~#@])", r"\1 \2", tweet_separated_puncs)
+        # better to split the text --> the keyword 'eek' also exists in 'week'.
+        if all(k in tweet_separated_puncs.split() for k in combined_labels):
+            #print tweet
+            tweets_with_combined_labels.append(tweet)
+
+    print 'No. of tweets with ' + str(combined_labels) + ' :', len(tweets_with_combined_labels)
+    return tweets_with_combined_labels

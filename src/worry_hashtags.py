@@ -19,6 +19,7 @@ save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_end_plus_
 ########################################################################################################################
 equal_sized_pos_neg_train_sets = True
 hash_labels_at_the_end_flags = [True]#, False]
+use_mech_turk_for_training = True
 ########################################################################################################################
 test_sets = ['hand_picked_data', 'mech_turk']
 remove_retweets = False
@@ -188,7 +189,7 @@ hand_picked_neg = not_worried_hand_picked + nothing_hand_picked
 
 keywords_source_pos = ['#worried']#, '#anxious']
 keywords_combined_source_pos = [('worry', 'help')]#, ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
-keywords_source_neg = ['#easy']#, '#calm', '#relaxed']
+keywords_source_neg = ['#easy', '#calm', '#relaxed']
 
 ###################################################### read source labels ################################################
 source_tweets_with_hash_keywords_pos = {}
@@ -231,7 +232,7 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
         # i is the subset length of keywords_source_pos
         for i in range(1, len(keywords_source_pos)+1):
             # j is the subset length of keywords_source_neg
-            for j in range(1, len(keywords_source_neg)+1):
+            for j in range(2, len(keywords_source_neg)+1):
                 # k is the subset length of keywords_combined_source_pos
                 for k in range(0, len(keywords_combined_source_pos) + 1):
 
@@ -250,6 +251,8 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
                                     keyword_combined_pos = list(keyword_combined_pos)
 
                                     tr_set_pos = keywords_pos + keyword_combined_pos
+                                    if use_mech_turk_for_training:
+                                        tr_set_pos = tr_set_pos + ['MechTurk']
                                     tr_set_neg = keywords_neg
 
                                     ########################################### current dir to save stuff for each iteration# ########################
@@ -318,9 +321,10 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
                                         all_hash_tweets_pos = all_hash_tweets_pos[: minimum]
                                         all_hash_tweets_neg = all_hash_tweets_neg[: minimum]
 
-                                        minimum = min(len(mech_turk_train_set_pos), len(mech_turk_train_set_neg))
-                                        mech_turk_train_set_pos = random.sample(mech_turk_train_set_pos, minimum)
-                                        mech_turk_train_set_neg = random.sample(mech_turk_train_set_neg, minimum)
+                                        if use_mech_turk_for_training:
+                                            minimum = min(len(mech_turk_train_set_pos), len(mech_turk_train_set_neg))
+                                            mech_turk_train_set_pos = random.sample(mech_turk_train_set_pos, minimum)
+                                            mech_turk_train_set_neg = random.sample(mech_turk_train_set_neg, minimum)
 
                                     my_util.write_csv_file(home_dir + save_dir+current_dir + 'training_set_pos', False, True, [[t] for t in all_hash_tweets_pos])
                                     my_util.write_csv_file(home_dir + save_dir+current_dir + 'training_set_neg', False, True, [[t] for t in all_hash_tweets_neg])
@@ -335,6 +339,8 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
                                     else:
                                         max_index = 1
 
+                                    ################################################ hash-tweets feature vects #######################################
+
                                     # since there is no intersection between tweets containing keywords,
                                     # we can send the aggregated tweets into the function below:
                                     hash_tweets_feature_vects_pos, hash_tweets_texts_pos, max_index, hash_tweets_norm_factors_pos = \
@@ -346,6 +352,7 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
                                         funcs_worry.get_sparse_feature_vector_worry(
                                             all_hash_tweets_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
                                         remove_stpwds_for_unigrams, new_normalisation_flag, hash_tweets_train_labs_neg, random)
+                                    ##################################################################################################################
 
 
                                     ################################################ combined tweets feature vects ###################################
@@ -369,16 +376,20 @@ for hash_labels_at_end in hash_labels_at_the_end_flags:
                                     ##################################################################################################################
 
                                     ###################################################### mech_turk feature vects ###################################
+                                    if use_mech_turk_for_training:
+                                        mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
+                                            funcs_worry.get_sparse_feature_vector_worry(
+                                                mech_turk_train_set_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                                remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
 
-                                    mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
-                                        funcs_worry.get_sparse_feature_vector_worry(
-                                            mech_turk_train_set_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
-
-                                    mech_turk_feature_vects_neg, mech_turk_texts_neg, max_index, mech_turk_norm_factors_neg = \
-                                        funcs_worry.get_sparse_feature_vector_worry(
-                                            mech_turk_train_set_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
-                                            remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                        mech_turk_feature_vects_neg, mech_turk_texts_neg, max_index, mech_turk_norm_factors_neg = \
+                                            funcs_worry.get_sparse_feature_vector_worry(
+                                                mech_turk_train_set_neg, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
+                                                remove_stpwds_for_unigrams, new_normalisation_flag, [], random)
+                                    else:
+                                        mech_turk_feature_vects_pos, mech_turk_feature_vects_neg = [], []
+                                        mech_turk_texts_pos, mech_turk_texts_neg = [], []
+                                        mech_turk_norm_factors_pos, mech_turk_norm_factors_neg = [], []
                                     ##################################################################################################################
 
                                     ###################################################### training set ####################################
