@@ -12,23 +12,9 @@ import math
 import re
 
 home_dir = os.path.expanduser('~')
-source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
-save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_end_plus_MT/test/'
 # source_dir = '/worry_hashtags/source/'
 # save_dir = '/worry_hashtags/'
-
-#################################################### labels ###################################################
-hash_labels_pos = ['#worried']#, '#anxious']
-combined_labels_pos = [('worry', 'help')]#, ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
-hash_labels_neg = ['#easy']#, '#calm', '#relaxed']
 ########################################################################################################################
-
-equal_sized_pos_neg_train_sets = True
-hash_labels_at_the_end_flags = [True]#, False]
-use_mech_turk_for_training = True
-########################################################################################################################
-test_sets = ['hand_picked_data']#, 'mech_turk']
-remove_retweets = False
 remove_stpwds_for_unigrams = False
 new_normalisation_flag = False
 random.seed(7)
@@ -56,7 +42,7 @@ balance_sets = True
 ########################################################################################################################
 
 
-def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name, current_dir):
+def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, file_name, save_dir, current_dir):
 
     header = ['the_keyword', 'the_size', 'other_keyword', 'other_size', 'intersection_size']
     intersection_file = []
@@ -81,19 +67,19 @@ def remove_intersection_from(the_keyword_tweet_dict, other_keyword_tweet_dict, f
         my_util.write_csv_file(home_dir + save_dir + current_dir + 'intersecttion_size_' + file_name, False, True, intersection_file)
 
 
-def remove_intersections(pos_set, combined_pos_set, neg_set, current_dir):
+def remove_intersections(pos_set, combined_pos_set, neg_set, save_dir, current_dir):
     # remove intersections within the positive labels
-    remove_intersection_from(pos_set, pos_set, 'pos_pos', current_dir)
+    remove_intersection_from(pos_set, pos_set, 'pos_pos', save_dir, current_dir)
     # remove intersections within the combined_pos labels
-    remove_intersection_from(combined_pos_set, combined_pos_set, 'combPos_combPos', current_dir)
+    remove_intersection_from(combined_pos_set, combined_pos_set, 'combPos_combPos', save_dir, current_dir)
     # remove intersection of the tweets_with_combined_pos_labels from the positive set
-    remove_intersection_from(combined_pos_set, pos_set, 'combPos_pos', current_dir)
+    remove_intersection_from(combined_pos_set, pos_set, 'combPos_pos', save_dir, current_dir)
     # remove intersections within the negative set
-    remove_intersection_from(neg_set, neg_set, 'neg_neg', current_dir)
+    remove_intersection_from(neg_set, neg_set, 'neg_neg', save_dir, current_dir)
     # remove intersection of negative set from positive set
-    remove_intersection_from(pos_set, neg_set, 'pos_neg', current_dir)
+    remove_intersection_from(pos_set, neg_set, 'pos_neg', save_dir, current_dir)
     # remove intersection of negative set from combined_positive set
-    remove_intersection_from(combined_pos_set, neg_set, 'combPos_neg', current_dir)
+    remove_intersection_from(combined_pos_set, neg_set, 'combPos_neg', save_dir, current_dir)
 
 
 def get_equal_set_for_each_label(label_tweet_dict):
@@ -121,7 +107,9 @@ def aggregate_all_tweets(label_tweet_dict):
 
 def get_raw_data():
 
-    hash_tweets_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_24_05_2013_noDup', False, True)
+    source_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/source/'
+
+    hash_tweets_noDup = my_util.read_csv_file(home_dir + source_dir + 'source_worry_hashtags_30_05_2013_noDup', False, True)
     hash_tweets_noDup = [t[0] for t in hash_tweets_noDup]
 
     worrieds_mech_turk_1, not_worrieds_mech_turk_1, tell_not_worry_mech_turk_1, nothing_MTurk_1 = \
@@ -205,7 +193,8 @@ def get_required_data(hash_labels_pos, combined_labels_pos, hash_labels_neg):
 
 
 def train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, tweets_with_combined_keywords_pos,
-                   mech_turk_train_set_pos, mech_turk_train_set_neg, test_set_pos, test_set_neg, current_dir):
+                   mech_turk_train_set_pos, mech_turk_train_set_neg, test_set_pos, test_set_neg,
+                   use_mech_turk_for_training, equal_sized_pos_neg_train_sets, save_dir, current_dir):
 
     statistic = []
     header = [
@@ -235,6 +224,8 @@ def train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg,
             minimum = min(len(mech_turk_train_set_pos), len(mech_turk_train_set_neg))
             mech_turk_train_set_pos = random.sample(mech_turk_train_set_pos, minimum)
             mech_turk_train_set_neg = random.sample(mech_turk_train_set_neg, minimum)
+
+    #all_hash_tweets_pos = all_hash_tweets_pos[: int(0.7*len(all_hash_tweets_pos))]
 
     print 'creating feature vectors...'
 
@@ -362,23 +353,23 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
                           mech_turk_test_set_pos, mech_turk_test_set_neg, mech_turk_train_set_pos, mech_turk_train_set_neg,
                           hand_picked_pos, hand_picked_neg,
                           hash_label_tweets_dict_pos, hash_label_at_end_tweets_dict_pos, combined_labels_tweets_dict_pos,
-                          hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg
-):
+                          hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg,
+                          test_sets, hash_labels_at_the_end_flags, use_mech_turk_for_training, equal_sized_pos_neg_train_sets, save_dir):
 
     header = []
     statistics = []
-    basic_header = ['hash_labels_at_end', 'tr_set_pos', 'tr_set_neg', 'ts_set']
+    basic_header = ['hash_labels_at_end', 'tr_set_pos', 'tr_set_neg', 'ts']
     for hash_labels_at_end in hash_labels_at_the_end_flags:
 
         # loop through all test sets
-        for ts_set in test_sets:
+        for ts in test_sets:
 
             # i is the subset length of keywords_source_pos
             for i in range(1, len(hash_labels_pos)+1):
                 # j is the subset length of keywords_source_neg
-                for j in range(1, len(hash_labels_neg)+1):
+                for j in range(3, len(hash_labels_neg)+1):
                     # k is the subset length of keywords_combined_source_pos
-                    for k in range(0, len(combined_labels_pos) + 1):
+                    for k in range(4, len(combined_labels_pos) + 1):
 
                         if i+k <> 0 and j <> 0:
 
@@ -400,7 +391,7 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
                                         tr_set_neg = keywords_neg
 
                                         ########################################### current dir to save stuff for each iteration# ########################
-                                        current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts_set + '/'
+                                        current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts + '/'
                                         if hash_labels_at_end:
                                             current_dir = 'endHash_' + current_dir
 
@@ -434,19 +425,21 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
                                             tweets_with_combined_keywords_pos[keyword] = combined_labels_tweets_dict_pos[keyword]
                                             print 'number of tweets containing ' + str(keyword) + ' :', len(tweets_with_combined_keywords_pos[keyword])
 
-                                        remove_intersections(tweets_with_hash_keywords_pos, tweets_with_combined_keywords_pos, tweets_with_hash_keywords_neg, current_dir)
+                                        remove_intersections(tweets_with_hash_keywords_pos, tweets_with_combined_keywords_pos,
+                                                             tweets_with_hash_keywords_neg, save_dir, current_dir)
 
 
-                                        if ts_set == 'hand_picked_data':
+                                        if ts == 'hand_picked_data':
                                             test_set_pos = hand_picked_pos
                                             test_set_neg = hand_picked_neg
-                                        elif ts_set == 'mech_turk':
+                                        elif ts == 'mech_turk':
                                             test_set_pos = mech_turk_test_set_pos
                                             test_set_neg = mech_turk_test_set_neg
 
-                                            prediction_result, statistic, statistic_dict = \
-                                            train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, tweets_with_combined_keywords_pos,
-                                                       mech_turk_train_set_pos, mech_turk_train_set_neg, test_set_pos, test_set_neg, current_dir)
+                                        prediction_result, statistic, statistic_dict = \
+                                        train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg, tweets_with_combined_keywords_pos,
+                                                   mech_turk_train_set_pos, mech_turk_train_set_neg, test_set_pos, test_set_neg,
+                                                   use_mech_turk_for_training, equal_sized_pos_neg_train_sets, save_dir, current_dir)
 
                                         basic_stat = [eval(h) for h in basic_header]
                                         header = basic_header + statistic[0]
@@ -466,14 +459,30 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
     return statistics
 
 
-mech_turk_test_set_pos, mech_turk_test_set_neg, mech_turk_train_set_pos, mech_turk_train_set_neg, \
-hand_picked_pos, hand_picked_neg, \
-hash_label_tweets_dict_pos, hash_label_at_end_tweets_dict_pos, combined_labels_tweets_dict_pos, \
-hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg = \
-    get_required_data(hash_labels_pos, combined_labels_pos, hash_labels_neg)
+def run_the_codes():
 
-search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
-                      mech_turk_test_set_pos, mech_turk_test_set_neg, mech_turk_train_set_pos, mech_turk_train_set_neg,
-                      hand_picked_pos, hand_picked_neg,
-                      hash_label_tweets_dict_pos, hash_label_at_end_tweets_dict_pos, combined_labels_tweets_dict_pos,
-                      hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg)
+    save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_end_plus_MT/'
+
+    hash_labels_pos = ['#worried']#, '#anxious']
+    combined_labels_pos = [('worry', 'help'), ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
+    hash_labels_neg = ['#easy', '#calm', '#relaxed']
+
+    test_sets = ['hand_picked_data']#, 'mech_turk']
+    hash_labels_at_the_end_flags = [True]#, False]
+    use_mech_turk_for_training = True
+    equal_sized_pos_neg_train_sets = True
+
+    mech_turk_test_set_pos, mech_turk_test_set_neg, mech_turk_train_set_pos, mech_turk_train_set_neg, \
+    hand_picked_pos, hand_picked_neg, \
+    hash_label_tweets_dict_pos, hash_label_at_end_tweets_dict_pos, combined_labels_tweets_dict_pos, \
+    hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg = \
+        get_required_data(hash_labels_pos, combined_labels_pos, hash_labels_neg)
+
+    search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
+                          mech_turk_test_set_pos, mech_turk_test_set_neg, mech_turk_train_set_pos, mech_turk_train_set_neg,
+                          hand_picked_pos, hand_picked_neg,
+                          hash_label_tweets_dict_pos, hash_label_at_end_tweets_dict_pos, combined_labels_tweets_dict_pos,
+                          hash_label_tweets_dict_neg, hash_label_at_end_tweets_dict_neg,
+                          test_sets, hash_labels_at_the_end_flags, use_mech_turk_for_training, equal_sized_pos_neg_train_sets, save_dir)
+
+run_the_codes()

@@ -843,29 +843,31 @@ def find_tweets_with_hash_label(tweets, hash_label):
 
     return tweets_with_hash_label
 
-def find_tweets_with_hash_label_at_the_end(tweets, label):
+def find_tweets_with_hash_label_at_the_end(tweets, hash_label):
 
-    print 'finding tweets with ' + label + ' at end...'
+    print 'finding tweets with ' + hash_label + ' at end...'
     print 'data size:', len(tweets)
-    #c=0
+    c=0
     tweets_with_label_at_the_end = []
     for tweet_text in tweets:
-        # c +=1
-        # if c % 1000 == 0:
-        #     print c
+        c +=1
+        if c % 1000 == 0:
+            print c
 
         tweet_text_no_url = remove_url(tweet_text)
 
-        #find any pattern like: #keyword (emoticons spaces emoticons #another_keyword#and_another_keyword) (spaces emoticons xxxx)
-        # the x's at the end (xxxx) could be a sign of sympathy and, hence, a sign of worry!
+        pattern = r'#\w+'
+        if len(re.findall(pattern, tweet_text_no_url)) < 7:
 
-        #pattern = '(?u)' + keyword + r'(\W*\s*W*(#\w+)*)*(\s\W*x*)*$'
-        pattern = label + r'(\s*#\w+)*$'
+            #find any pattern like: #keyword (emoticons spaces emoticons #another_keyword#and_another_keyword) (spaces emoticons xxxx)
+            # the x's at the end (xxxx) could be a sign of sympathy and, hence, a sign of worry!
+            pattern = '(?u)' + hash_label + r'(\W*\s*W*(#\w+)*)*(\s\W*x*)*$'
+            #pattern = hash_label + r'(\s*#\w+)*$'
 
-        if re.search(pattern, tweet_text_no_url) <> None:
-            tweets_with_label_at_the_end.append(tweet_text)
+            if re.search(pattern, tweet_text_no_url) <> None:
+                tweets_with_label_at_the_end.append(tweet_text)
 
-    print 'No. of tweets with ' + label + ' at end:', len(tweets_with_label_at_the_end)
+    print 'No. of tweets with ' + hash_label + ' at end:', len(tweets_with_label_at_the_end)
     return tweets_with_label_at_the_end
 
 def find_tweets_with_combined_labels(tweets, combined_labels):
