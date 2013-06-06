@@ -16,7 +16,7 @@ home_dir = os.path.expanduser('~')
 # save_dir = '/worry_hashtags/'
 ########################################################################################################################
 remove_stpwds_for_unigrams = False
-new_normalisation_flag = True
+new_normalisation_flag = False
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
