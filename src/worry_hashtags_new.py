@@ -16,7 +16,7 @@ home_dir = os.path.expanduser('~')
 # save_dir = '/worry_hashtags/'
 ########################################################################################################################
 remove_stpwds_for_unigrams = False
-new_normalisation_flag = False
+new_normalisation_flag = True
 random.seed(7)
 # positive labels are associated to worried/concerned/stressed... tweets.
 # negative labels are associated to NOT worried/concerned/stressed... tweets.
@@ -140,6 +140,9 @@ def filter_tweets_by_labels(hash_tweets, hash_labels_pos, combined_labels_pos, h
     hash_label_at_end_tweets_dict_neg = {}
     combined_labels_tweets_dict_pos = {}
 
+    # happy_tweets = funcs_worry.find_happy_tweets(hash_tweets)
+    # hash_tweets = [t for t in hash_tweets if t not in happy_tweets]
+
     for label in hash_labels_pos:
         tweets_with_hash_keyword = funcs_worry.find_tweets_with_hash_label(hash_tweets, label)
         tweets_with_hash_keyword_at_end = funcs_worry.find_tweets_with_hash_label_at_the_end(tweets_with_hash_keyword, label)
@@ -225,7 +228,7 @@ def train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg,
             mech_turk_train_set_pos = random.sample(mech_turk_train_set_pos, minimum)
             mech_turk_train_set_neg = random.sample(mech_turk_train_set_neg, minimum)
 
-    #all_hash_tweets_pos = all_hash_tweets_pos[: int(0.7*len(all_hash_tweets_pos))]
+    #all_hash_tweets_pos = all_hash_tweets_pos[: int(0.65*len(all_hash_tweets_pos))]
 
     print 'creating feature vectors...'
 
@@ -275,10 +278,6 @@ def train_and_test(tweets_with_hash_keywords_pos, tweets_with_hash_keywords_neg,
     ##################################################################################################################
 
     ###################################################### mech_turk feature vects ###################################
-    mech_turk_feature_vects_pos, mech_turk_feature_vects_neg = [], []
-    mech_turk_texts_pos, mech_turk_texts_neg = [], []
-    mech_turk_norm_factors_pos, mech_turk_norm_factors_neg = [], []
-
     mech_turk_feature_vects_pos, mech_turk_texts_pos, max_index, mech_turk_norm_factors_pos = \
         funcs_worry.get_sparse_feature_vector_worry(
             mech_turk_train_set_pos, features_dict, features_count_dict, max_index, min_ngram, max_ngram,
@@ -369,7 +368,7 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
                 # j is the subset length of keywords_source_neg
                 for j in range(3, len(hash_labels_neg)+1):
                     # k is the subset length of keywords_combined_source_pos
-                    for k in range(4, len(combined_labels_pos) + 1):
+                    for k in range(0, len(combined_labels_pos) + 1):
 
                         if i+k <> 0 and j <> 0:
 
@@ -386,9 +385,10 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
                                         keyword_combined_pos = list(keyword_combined_pos)
 
                                         tr_set_pos = keywords_pos + keyword_combined_pos
+                                        tr_set_neg = keywords_neg
                                         if use_mech_turk_for_training:
                                             tr_set_pos = tr_set_pos + ['MechTurk']
-                                        tr_set_neg = keywords_neg
+                                            tr_set_neg = tr_set_neg + ['MechTurk']
 
                                         ########################################### current dir to save stuff for each iteration# ########################
                                         current_dir = str(tr_set_pos) + '_' + str(tr_set_neg) + '_vs_' + ts + '/'
@@ -461,13 +461,13 @@ def search_through_labels(hash_labels_pos, combined_labels_pos, hash_labels_neg,
 
 def run_the_codes():
 
-    save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_end_plus_MT/'
+    save_dir = '/Chatterbox_UCL_Advance/worry_brit_gas_exp/exp_hashtags_at_end_plus_MT/final_exps/new_norm_factor/'
 
-    hash_labels_pos = ['#worried']#, '#anxious']
-    combined_labels_pos = [('worry', 'help'), ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
+    hash_labels_pos = ['#anxious']#[,'#worried']
+    combined_labels_pos = []#[('worry', 'help')]#, ('worry', 'eek'), ('anxious', 'help'), ('anxious', 'eek')]
     hash_labels_neg = ['#easy', '#calm', '#relaxed']
 
-    test_sets = ['hand_picked_data']#, 'mech_turk']
+    test_sets = ['hand_picked_data', 'mech_turk']
     hash_labels_at_the_end_flags = [True]#, False]
     use_mech_turk_for_training = True
     equal_sized_pos_neg_train_sets = True

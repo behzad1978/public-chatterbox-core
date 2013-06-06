@@ -888,3 +888,17 @@ def find_tweets_with_combined_labels(tweets, combined_labels):
 
     print 'No. of tweets with ' + str(combined_labels) + ' :', len(tweets_with_combined_labels)
     return tweets_with_combined_labels
+
+def find_happy_tweets(tweets):
+
+    return_tweets = []
+    for tweet_text in tweets:
+
+        lol = r'l+o+l+'
+        haha = r'h+a+h+a*'
+        if re.search(lol, tweet_text) <> None:
+            return_tweets.append(tweet_text)
+        elif re.search(haha, tweet_text) <> None:
+            return_tweets.append(tweet_text)
+
+    return return_tweets
